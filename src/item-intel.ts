@@ -70,6 +70,15 @@ function powerSpecial(m: TeamMemberForItem): number {
   return (m.baseStats?.special ?? 55) * Math.sqrt(m.level);
 }
 
+/** Carry proxy: battles usually go through the strongest mon; Lucky Egg rewards only participate in battles. */
+function luckyEggSlotFitness(p: TeamMemberForItem): number {
+  if (p.level >= 100) return -1e9;
+  const lv = Math.max(1, p.level);
+  const carry = bst(p) * Math.sqrt(lv);
+  // Tie-breaker: levels still compound through an upcoming evolution.
+  return CAN_EVOLVE_SPECIES.has(p.speciesId) ? carry * 1.06 : carry;
+}
+
 /** Base tiers — same spirit as prior bot priority; tweaked in scoreItemPick. */
 const ITEM_BASE: Record<string, number> = {
   lucky_egg: 100,
@@ -152,7 +161,7 @@ export function heldItemFitnessAtSlot(itemId: string, slotIndex: number, team: T
       return share * 100 + bst(p);
     }
     case "lucky_egg":
-      return 500 - p.level;
+      return luckyEggSlotFitness(p);
     case "leftovers":
     case "rocky_helmet":
       return (p.baseStats?.hp ?? 60) * bst(p);
@@ -290,8 +299,13 @@ export function scoreItemPick(itemId: string, team: TeamMemberForItem[]): number
     if (team.some((p) => (p.currentHp ?? 1) <= 0)) score += 40;
   }
   if (itemId === "lucky_egg") {
-    const minLv = team.reduce((m, p) => Math.min(m, p.level), 99);
-    if (minLv < 30) score += 12;
+    let bestCarry = 0;
+    for (const p of team) {
+      if (p.level >= 100) continue;
+      const v = bst(p) * Math.sqrt(Math.max(1, p.level));
+      if (v > bestCarry) bestCarry = v;
+    }
+    score += Math.min(22, bestCarry / 22);
   }
   if (itemId === "life_orb" || itemId === "shell_bell" || itemId === "wide_lens") {
     const mx = team.reduce((m, p) => Math.max(m, Math.max(powerPhysical(p), powerSpecial(p))), 0);
