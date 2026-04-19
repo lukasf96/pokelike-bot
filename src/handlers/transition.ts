@@ -1,7 +1,6 @@
-import type { Page } from "puppeteer";
-
+import type { Handler } from "../state/handler.js";
 import { sleep } from "../page-utils.js";
 
-export async function handleTransition(_page: Page): Promise<void> {
+export const handleTransition: Handler = async () => {
   await sleep(2500);
-}
+};

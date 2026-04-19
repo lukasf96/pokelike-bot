@@ -1,12 +1,10 @@
-import type { Page } from "puppeteer";
-
+import type { Handler } from "../state/handler.js";
 import { logAction } from "../logger.js";
-import { logRunEnd } from "../run-log.js";
 import { clickSel, sleep } from "../page-utils.js";
 
-export async function handleWin(page: Page): Promise<void> {
+/** Run-end emission is owned by `RunMachine`; this handler just advances the UI. */
+export const handleWin: Handler = async (_tick, { page }) => {
   logAction("win", "WON THE GAME — starting new run…");
-  await logRunEnd(page, "won");
   await clickSel(page, "#btn-play-again");
   await sleep(1000);
-}
+};

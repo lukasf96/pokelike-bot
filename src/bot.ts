@@ -1,4 +1,4 @@
-import puppeteer, { type Browser } from "puppeteer";
+import puppeteer, { type Browser, type Page } from "puppeteer";
 
 import { GAME_URL } from "./constants.js";
 import { warnIfUnexpectedGameVersion } from "./game-version.js";
@@ -32,14 +32,71 @@ import { handleTrainer } from "./handlers/trainer.js";
 import { handleTransition } from "./handlers/transition.js";
 import { handleWin } from "./handlers/win.js";
 import { clickFirst, humanDelay, sleep } from "./page-utils.js";
-import { clearSnapshot, snapshotGameState, updateRunSession } from "./run-log.js";
-import {
-  activeScreen,
-  isEeveeChoiceOpen,
-  isItemEquipOpen,
-  isMoveTutorOpen,
-  screenText,
-} from "./screen-detection.js";
+import { handleRunLogEvent } from "./run-log.js";
+import type { Handler, HandlerCtx } from "./state/handler.js";
+import { RunMachine, type RunEvent } from "./state/run-machine.js";
+import { observe } from "./state/snapshot.js";
+import type { PhaseKind, Tick } from "./state/types.js";
+
+const HANDLERS: Partial<Record<PhaseKind, Handler>> = {
+  title: handleTitle,
+  trainer: handleTrainer,
+  starter: handleStarter,
+  map: handleMap,
+  battle: handleBattle,
+  catch: handleCatch,
+  item: handleItem,
+  swap: handleSwap,
+  trade: handleTrade,
+  shiny: handleShinyExtended,
+  badge: handleBadge,
+  transition: handleTransition,
+  win: handleWin,
+  gameover: handleGameOver,
+  "eevee-choice": handleEeveeChoice,
+  "move-tutor": handleMoveTutor,
+  "item-equip": handleItemEquip,
+};
+
+interface LoopState {
+  stuckCount: number;
+}
+
+async function safeObserve(page: Page, tickId: number): Promise<Tick> {
+  try {
+    return await observe(page, tickId);
+  } catch {
+    await sleep(1000);
+    return {
+      tickId,
+      observedAt: Date.now(),
+      phase: { kind: "unknown" },
+      game: null,
+      ui: {},
+    };
+  }
+}
+
+function processEvents(events: RunEvent[], tick: Tick, currentTurn: number): void {
+  for (const e of events) {
+    handleRunLogEvent(e, tick, currentTurn);
+    if (e.type === "phase-changed") {
+      const peek = screenPeekLine(e.to.kind, tick.ui.peek?.raw ?? "");
+      if (peek) logScreenPeek(peek);
+    }
+  }
+}
+
+async function handleStuck(_tick: Tick, ctx: HandlerCtx, state: LoopState): Promise<void> {
+  state.stuckCount += 1;
+  if (state.stuckCount % 3 === 0) {
+    logAction("stuck", `Trying any visible button… (×${state.stuckCount})`);
+    await clickFirst(ctx.page, ".screen.active button, .screen.active [role='button']");
+    await humanDelay(500, 1000);
+  } else {
+    await sleep(600);
+  }
+}
 
 async function runBot(): Promise<void> {
   logStartupBanner();
@@ -56,156 +113,44 @@ async function runBot(): Promise<void> {
   );
 
   logNavigating(GAME_URL);
-  // Avoid networkidle2: ongoing requests (e.g. Firebase) stretch cold-start by seconds.
   await page.goto(GAME_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
   await page.waitForSelector("#btn-new-run", { visible: true, timeout: 30000 });
 
   await enableAutoSkip(page);
   await warnIfUnexpectedGameVersion(page);
 
-  let turn = 0;
-  let stuckCount = 0;
-  let run = 1;
-  let lastScreen = "";
-  let prevScreen = "";
+  const machine = new RunMachine();
+  const loop: LoopState = { stuckCount: 0 };
+  let tickId = 0;
 
-  logRunStarted(run);
+  logRunStarted(machine.runNumber);
 
   while (true) {
-    turn++;
-    updateRunSession(run, turn);
+    tickId += 1;
+    const tick = await safeObserve(page, tickId);
+    const events = machine.step(tick);
 
-    let screen: string;
-    try {
-      screen = await activeScreen(page);
-    } catch {
-      await sleep(1000);
-      continue;
-    }
-
-    const wasInRun =
-      prevScreen !== "" &&
-      !["title-screen", "trainer-screen", "starter-screen", "unknown"].includes(prevScreen);
-    if (screen === "title-screen" && wasInRun && prevScreen !== "title-screen") {
-      run++;
-      turn = 1;
-      updateRunSession(run, turn);
-      clearSnapshot();
-      logGameOverRunBanner(run);
-    }
-
-    if (!["title-screen", "trainer-screen", "starter-screen", "unknown"].includes(screen)) {
-      snapshotGameState(page).catch(() => {});
-    }
-
-    let eeveeChoiceOpen = false;
-    let tutorOpen = false;
-    let itemEquipOpen = false;
-    try {
-      eeveeChoiceOpen = await isEeveeChoiceOpen(page);
-      if (!eeveeChoiceOpen && (screen === "map-screen" || screen === "item-screen")) {
-        tutorOpen = await isMoveTutorOpen(page);
-        if (!tutorOpen) itemEquipOpen = await isItemEquipOpen(page);
+    for (const e of events) {
+      if (e.type === "run-ended") {
+        logGameOverRunBanner(e.runNumber + 1);
+      } else if (e.type === "phase-changed") {
+        logTurnHeader(machine.runNumber, machine.turnNumber, e.to.kind);
       }
-    } catch {
-      /* ignore */
     }
+    processEvents(events, tick, machine.turnNumber);
 
-    const effectiveScreen = eeveeChoiceOpen ? "eevee-choice" : tutorOpen ? "move-tutor" : itemEquipOpen ? "item-equip" : screen;
+    const ctx: HandlerCtx = {
+      page,
+      reobserve: () => observe(page, tickId),
+    };
 
-    if (effectiveScreen !== lastScreen) {
-      let text = "";
-      try {
-        text = await screenText(page);
-      } catch {
-        /* ignore */
-      }
-      logTurnHeader(run, turn, effectiveScreen);
-      const peek = screenPeekLine(effectiveScreen, text);
-      if (peek) logScreenPeek(peek);
-      lastScreen = effectiveScreen;
-    }
-
-    prevScreen = screen;
-
+    const handler = HANDLERS[tick.phase.kind];
     try {
-      if (eeveeChoiceOpen) {
-        await handleEeveeChoice(page);
-        stuckCount = 0;
-      } else if (tutorOpen) {
-        await handleMoveTutor(page);
-        stuckCount = 0;
-      } else if (itemEquipOpen) {
-        await handleItemEquip(page);
-        stuckCount = 0;
+      if (handler) {
+        await handler(tick, ctx);
+        loop.stuckCount = 0;
       } else {
-        switch (screen) {
-          case "title-screen":
-            await handleTitle(page);
-            stuckCount = 0;
-            break;
-          case "trainer-screen":
-            await handleTrainer(page);
-            stuckCount = 0;
-            break;
-          case "starter-screen":
-            await handleStarter(page);
-            stuckCount = 0;
-            break;
-          case "map-screen":
-            await handleMap(page);
-            stuckCount = 0;
-            break;
-          case "battle-screen":
-            await handleBattle(page);
-            stuckCount = 0;
-            break;
-          case "catch-screen":
-            await handleCatch(page);
-            stuckCount = 0;
-            break;
-          case "item-screen":
-            await handleItem(page);
-            stuckCount = 0;
-            break;
-          case "swap-screen":
-            await handleSwap(page);
-            stuckCount = 0;
-            break;
-          case "trade-screen":
-            await handleTrade(page);
-            stuckCount = 0;
-            break;
-          case "shiny-screen":
-            await handleShinyExtended(page);
-            stuckCount = 0;
-            break;
-          case "badge-screen":
-            await handleBadge(page);
-            stuckCount = 0;
-            break;
-          case "transition-screen":
-            await handleTransition(page);
-            stuckCount = 0;
-            break;
-          case "win-screen":
-            await handleWin(page);
-            stuckCount = 0;
-            break;
-          case "gameover-screen":
-            await handleGameOver(page);
-            stuckCount = 0;
-            break;
-          default:
-            stuckCount++;
-            if (stuckCount % 3 === 0) {
-              logAction("stuck", `Trying any visible button… (×${stuckCount})`);
-              await clickFirst(page, ".screen.active button, .screen.active [role='button']");
-              await humanDelay(500, 1000);
-            } else {
-              await sleep(600);
-            }
-        }
+        await handleStuck(tick, ctx, loop);
       }
     } catch (err) {
       logAction("error", String(err).slice(0, 120));

@@ -4,7 +4,9 @@ import { CROSS_SPECIES_EVOLUTION_BST, GEN1_EVOLUTIONS } from "../data/gen1-evolu
 import { logAction } from "../logger.js";
 import { GEN1_SPECIES_BST } from "../data/gen1-species.js";
 import type { TeamMemberForItem } from "../item-intel.js";
-import { readGameState } from "../game-state.js";
+import type { HandlerCtx } from "../state/handler.js";
+import { selectItemTeam } from "../state/selectors.js";
+import type { GameSnapshot, Tick } from "../state/types.js";
 import { sleep } from "../page-utils.js";
 
 function speciesBaseStatTotal(speciesId: number): number | undefined {
@@ -13,16 +15,14 @@ function speciesBaseStatTotal(speciesId: number): number | undefined {
   return CROSS_SPECIES_EVOLUTION_BST[speciesId];
 }
 
-interface BagEntry {
-  idx: number;
-  id: string;
-  usable: boolean;
-}
-
 interface UsableSnapshot {
   team: TeamMemberForItem[];
-  bag: BagEntry[];
+  bag: GameSnapshot["bag"];
   currentMap: number;
+}
+
+function fromGame(game: GameSnapshot): UsableSnapshot {
+  return { team: selectItemTeam(game), bag: game.bag, currentMap: game.currentMap };
 }
 
 function sumBst(m: TeamMemberForItem): number {
@@ -134,20 +134,6 @@ function shouldUseMaxRevive(snap: UsableSnapshot): boolean {
   return snap.currentMap >= 8 || alive < 4;
 }
 
-async function readUsableSnapshot(page: Page): Promise<UsableSnapshot> {
-  const gs = await readGameState(page);
-  const team: TeamMemberForItem[] = gs.team.map((p) => ({
-    types: p.types,
-    baseStats: p.baseStats,
-    level: p.level,
-    speciesId: p.speciesId,
-    currentHp: p.currentHp,
-    maxHp: p.maxHp,
-    heldItem: p.heldItem ?? undefined,
-  }));
-  return { team, bag: gs.items, currentMap: gs.currentMap };
-}
-
 async function clickUsableItemOnSlot(page: Page, bagIdx: number, slotIdx: number): Promise<boolean> {
   const opened = await page.evaluate((badgeIdx: number): boolean => {
     const bar = document.getElementById("item-bar");
@@ -206,18 +192,20 @@ function planNextUse(snap: UsableSnapshot): NextUse {
  * Consumes usable bag items via `#usable-item-modal` (A2 in `.docs/BOT_IMPROVEMENTS.md`).
  * Invoked from map flow before held-item bag equip / swaps.
  */
-export async function maybeUseUsableItems(page: Page): Promise<void> {
+export async function maybeUseUsableItems(initialTick: Tick, ctx: HandlerCtx): Promise<void> {
   let used = 0;
   const maxIter = 24;
+  let tick: Tick = initialTick;
 
   for (let iter = 0; iter < maxIter; iter += 1) {
-    const snap = await readUsableSnapshot(page);
+    if (!tick.game) break;
+    const snap = fromGame(tick.game);
     const next = planNextUse(snap);
     if (!next) break;
 
-    const ok = await clickUsableItemOnSlot(page, next.bagIdx, next.slotIdx);
+    const ok = await clickUsableItemOnSlot(ctx.page, next.bagIdx, next.slotIdx);
     if (!ok) {
-      await page.evaluate(() => {
+      await ctx.page.evaluate(() => {
         document.querySelector<HTMLElement>("#btn-cancel-use")?.click();
       });
       await sleep(200);
@@ -227,6 +215,7 @@ export async function maybeUseUsableItems(page: Page): Promise<void> {
     used += 1;
     logAction("usable", `${next.itemId} → slot ${next.slotIdx} (map ${snap.currentMap})`);
     await sleep(520);
+    tick = await ctx.reobserve();
   }
 
   if (used > 0) {

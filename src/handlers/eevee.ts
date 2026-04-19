@@ -1,6 +1,4 @@
-import type { Page } from "puppeteer";
-
-import { readGameState } from "../game-state.js";
+import type { Handler } from "../state/handler.js";
 import { logAction } from "../logger.js";
 import { sleep } from "../page-utils.js";
 
@@ -26,7 +24,6 @@ export function pickEeveelutionCardIndex(currentMap: number, rawTeamTypes: strin
   const hasElectric = types.has("Electric");
   const hasFire = types.has("Fire");
 
-  // Human "Map 5+" => currentMap >= 4 (Koga onward): Vaporeon usually safest (bulk + Water STAB).
   if (currentMap >= 4) {
     if (!hasWater) return 1;
     if (!hasElectric) return 2;
@@ -55,14 +52,12 @@ export function pickEeveelutionCardIndex(currentMap: number, rawTeamTypes: strin
   return 1;
 }
 
-export async function handleEeveeChoice(page: Page): Promise<void> {
-  const gs = await readGameState(page);
-  const ctx = {
-    currentMap: gs.currentMap,
-    teamTypes: gs.team.flatMap((p) => p.types),
-  };
+export const handleEeveeChoice: Handler = async (tick, { page }) => {
+  const game = tick.game;
+  const currentMap = game?.currentMap ?? 0;
+  const teamTypes = game ? game.team.flatMap((p) => p.types) : [];
 
-  const idx = pickEeveelutionCardIndex(ctx.currentMap, ctx.teamTypes);
+  const idx = pickEeveelutionCardIndex(currentMap, teamTypes);
   const label = EEVEE_CARD_LABELS[idx] ?? "Vaporeon";
 
   const clicked = await page.evaluate((cardIndex: number) => {
@@ -75,6 +70,6 @@ export async function handleEeveeChoice(page: Page): Promise<void> {
     return true;
   }, idx);
 
-  logAction("eevee", `Chose ${label} (idx=${idx}) map=${ctx.currentMap} clicked=${clicked}`);
+  logAction("eevee", `Chose ${label} (idx=${idx}) map=${currentMap} clicked=${clicked}`);
   await sleep(600);
-}
+};

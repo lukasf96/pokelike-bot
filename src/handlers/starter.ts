@@ -1,9 +1,8 @@
-import type { Page } from "puppeteer";
-
+import type { Handler } from "../state/handler.js";
 import { logAction } from "../logger.js";
 import { sleep } from "../page-utils.js";
 
-export async function handleStarter(page: Page): Promise<void> {
+export const handleStarter: Handler = async (_tick, { page }) => {
   await page
     .waitForFunction(
       (): boolean => {
@@ -47,4 +46,4 @@ export async function handleStarter(page: Page): Promise<void> {
     logAction("starter", `Picked: ${picked}`);
   }
   await sleep(800);
-}
+};

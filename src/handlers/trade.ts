@@ -1,12 +1,10 @@
-import type { Page } from "puppeteer";
-
-import type { ReleaseTeamMember } from "../release-candidate-intel.js";
+import type { Handler } from "../state/handler.js";
 import { logAction } from "../logger.js";
 import {
   isHardProtectedRelease,
   tradeAdjustedGainForSlot,
 } from "../release-candidate-intel.js";
-import { readGameState } from "../game-state.js";
+import { selectMoonStoneInBag, selectReleaseTeam } from "../state/selectors.js";
 import { clickSel, sleep } from "../page-utils.js";
 
 /** B5: expected single-mon swing should clear variance + coverage cost. */
@@ -16,21 +14,17 @@ const MIN_TRADE_ADJUSTED_GAIN = 60;
  * game.js doTradeNode: offer is random from getCatchChoices (same BST bucket as map),
  * 3 levels higher — accept when adjusted gain (raw − coverage penalties) beats threshold.
  */
-export async function handleTrade(page: Page): Promise<void> {
-  const gs = await readGameState(page);
-  const snap = {
-    mapIndex: gs.currentMap,
-    moonStoneInBag: gs.items.some((it) => it.id === "moon_stone"),
-    team: gs.team.map((p): ReleaseTeamMember => ({
-      speciesId: p.speciesId,
-      level: p.level,
-      isShiny: p.isShiny,
-      heldItemId: p.heldItem?.id ?? null,
-      moveTier: p.moveTier,
-    })),
-  };
+export const handleTrade: Handler = async (tick, { page }) => {
+  if (!tick.game) {
+    await clickSel(page, "#btn-skip-trade");
+    await sleep(800);
+    return;
+  }
+  const team = selectReleaseTeam(tick.game);
+  const moonStoneInBag = selectMoonStoneInBag(tick.game);
+  const mapIndex = tick.game.currentMap;
 
-  if (snap.team.length === 0) {
+  if (team.length === 0) {
     await clickSel(page, "#btn-skip-trade");
     await sleep(800);
     return;
@@ -38,10 +32,10 @@ export async function handleTrade(page: Page): Promise<void> {
 
   let bestIdx = -1;
   let bestGain = -Infinity;
-  for (let i = 0; i < snap.team.length; i++) {
-    const m = snap.team[i]!;
-    if (isHardProtectedRelease(m, snap.moonStoneInBag)) continue;
-    const adj = tradeAdjustedGainForSlot(snap.team, i, snap.mapIndex);
+  for (let i = 0; i < team.length; i++) {
+    const m = team[i]!;
+    if (isHardProtectedRelease(m, moonStoneInBag)) continue;
+    const adj = tradeAdjustedGainForSlot(team, i, mapIndex);
     if (adj > bestGain) {
       bestGain = adj;
       bestIdx = i;
@@ -66,4 +60,4 @@ export async function handleTrade(page: Page): Promise<void> {
   }
 
   await sleep(800);
-}
+};

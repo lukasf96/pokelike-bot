@@ -1,45 +1,28 @@
-import type { Page } from "puppeteer";
-
-import { itemNameToId, scoreItemPick, type TeamMemberForItem } from "../item-intel.js";
-import { readGameState } from "../game-state.js";
+import type { Handler } from "../state/handler.js";
+import { itemNameToId, scoreItemPick } from "../item-intel.js";
 import { logAction } from "../logger.js";
+import { selectItemTeam } from "../state/selectors.js";
 import { sleep } from "../page-utils.js";
 
-export async function handleItem(page: Page): Promise<void> {
-  const [gs, names] = await Promise.all([
-    readGameState(page),
-    page.evaluate(() =>
-      Array.from(document.querySelectorAll<HTMLElement>("#item-choices .item-card"))
-        .map((c) => c.querySelector<HTMLElement>(".item-name")?.textContent?.trim() ?? ""),
-    ),
-  ]);
-  const team: TeamMemberForItem[] = gs.team.map((p) => ({
-    types: p.types,
-    baseStats: p.baseStats,
-    level: p.level,
-    speciesId: p.speciesId,
-    currentHp: p.currentHp,
-    maxHp: p.maxHp,
-    heldItem: p.heldItem ?? undefined,
-  }));
-  const snapshot = { names, team };
+export const handleItem: Handler = async (tick, { page }) => {
+  const names = tick.ui.item?.names ?? [];
+  if (names.length === 0) {
+    logAction("item", "No item cards — skip");
+    await sleep(800);
+    return;
+  }
+
+  const team = tick.game ? selectItemTeam(tick.game) : [];
 
   let bestIdx = 0;
   let bestScore = -Infinity;
-  for (let i = 0; i < snapshot.names.length; i += 1) {
-    const name = snapshot.names[i]!;
-    const id = itemNameToId(name);
-    const s = scoreItemPick(id, snapshot.team);
+  for (let i = 0; i < names.length; i += 1) {
+    const id = itemNameToId(names[i]!);
+    const s = scoreItemPick(id, team);
     if (s > bestScore) {
       bestScore = s;
       bestIdx = i;
     }
-  }
-
-  if (snapshot.names.length === 0) {
-    logAction("item", "No item cards — skip");
-    await sleep(800);
-    return;
   }
 
   const pickedName = await page.evaluate((idx: number): string => {
@@ -52,4 +35,4 @@ export async function handleItem(page: Page): Promise<void> {
 
   logAction("item", `Picked: ${pickedName} (score ${bestScore.toFixed(1)})`);
   await sleep(800);
-}
+};

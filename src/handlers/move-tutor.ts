@@ -1,18 +1,11 @@
-import type { Page } from "puppeteer";
-
-import { readGameState } from "../game-state.js";
+import type { Handler } from "../state/handler.js";
 import { logAction } from "../logger.js";
 import { sleep } from "../page-utils.js";
-import { pickTutorSlot, type TutorTeamSlot } from "../tutor-intel.js";
+import { pickTutorSlot } from "../tutor-intel.js";
+import { selectTutorTeam } from "../state/selectors.js";
 
-export async function handleMoveTutor(page: Page): Promise<void> {
-  const gs = await readGameState(page);
-  const team: TutorTeamSlot[] = gs.team.map((p) => ({
-    speciesId: p.speciesId,
-    level: Math.max(1, p.level),
-    moveTier: p.moveTier,
-  }));
-
+export const handleMoveTutor: Handler = async (tick, { page }) => {
+  const team = tick.game ? selectTutorTeam(tick.game) : [];
   const chosenIdx = pickTutorSlot(team);
 
   const result = await page.evaluate((idx: number | null): string => {
@@ -37,4 +30,4 @@ export async function handleMoveTutor(page: Page): Promise<void> {
 
   logAction("tutor", result);
   await sleep(600);
-}
+};

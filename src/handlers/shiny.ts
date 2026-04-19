@@ -1,18 +1,17 @@
-import type { Page } from "puppeteer";
-
+import type { Handler } from "../state/handler.js";
 import { GEN1_SPECIES_BST } from "../data/gen1-species.js";
 import { logAction } from "../logger.js";
-import { readGameState } from "../game-state.js";
 import { clickSel, sleep } from "../page-utils.js";
+import type { GameSnapshot } from "../state/types.js";
 
-interface ShinyScreenSnapshot {
+interface ShinyDecisionInput {
   team: Array<{ speciesId: number; level: number }>;
   shinySpeciesId: number;
   shinyLevel: number;
 }
 
-function shouldTakeShiny(snapshot: ShinyScreenSnapshot): boolean {
-  const { team, shinySpeciesId, shinyLevel } = snapshot;
+function shouldTakeShiny(input: ShinyDecisionInput): boolean {
+  const { team, shinySpeciesId, shinyLevel } = input;
   if (team.length < 6) return true;
   if (shinySpeciesId < 1 || shinyLevel < 1) return true;
 
@@ -32,32 +31,26 @@ function shouldTakeShiny(snapshot: ShinyScreenSnapshot): boolean {
   return shinyPow >= weakest;
 }
 
-async function handleShiny(page: Page): Promise<void> {
-  const gs = await readGameState(page);
-  const team = gs.team.map((p) => ({ speciesId: p.speciesId, level: p.level }));
+function teamForShiny(game: GameSnapshot | null): Array<{ speciesId: number; level: number }> {
+  if (!game) return [];
+  return game.team.map((p) => ({ speciesId: p.speciesId, level: p.level }));
+}
 
-  const { shinySpeciesId, shinyLevel } = await page.evaluate((): { shinySpeciesId: number; shinyLevel: number } => {
-    const img = document.querySelector<HTMLImageElement>("#shiny-content img.poke-sprite");
-    const src = img?.getAttribute("src") ?? "";
-    const idFromShiny = src.match(/\/pokemon\/shiny\/(\d+)\.png/i);
-    const idFromPlain = src.match(/\/pokemon\/(\d+)\.png/i);
-    const shinySpeciesId = idFromShiny
-      ? Number(idFromShiny[1])
-      : idFromPlain
-        ? Number(idFromPlain[1])
-        : 0;
+export const handleShinyExtended: Handler = async (tick, { page }) => {
+  const tradeContinue = await clickSel(page, "#btn-trade-continue");
+  if (tradeContinue) {
+    logAction("shiny", "Trade reveal — continuing");
+    await sleep(800);
+    return;
+  }
 
-    const lvEl = document.querySelector("#shiny-content .poke-level");
-    const lvText = lvEl?.textContent ?? "";
-    const lvMatch = lvText.match(/(\d+)/);
-    const shinyLevel = lvMatch ? Number(lvMatch[1]) : 0;
-
-    return { shinySpeciesId, shinyLevel };
-  });
-
-  const snapshot: ShinyScreenSnapshot = { team, shinySpeciesId, shinyLevel };
-
-  const take = shouldTakeShiny(snapshot);
+  const shiny = tick.ui.shiny;
+  const input: ShinyDecisionInput = {
+    team: teamForShiny(tick.game),
+    shinySpeciesId: shiny?.speciesId ?? 0,
+    shinyLevel: shiny?.level ?? 0,
+  };
+  const take = shouldTakeShiny(input);
 
   if (take) {
     const took = await clickSel(page, "#btn-take-shiny");
@@ -72,7 +65,7 @@ async function handleShiny(page: Page): Promise<void> {
     if (skipped) {
       logAction(
         "shiny",
-        `Skipped weak shiny (species ${snapshot.shinySpeciesId} Lv${snapshot.shinyLevel} vs team)`,
+        `Skipped weak shiny (species ${input.shinySpeciesId} Lv${input.shinyLevel} vs team)`,
       );
     } else {
       await clickSel(page, "#btn-take-shiny");
@@ -81,15 +74,4 @@ async function handleShiny(page: Page): Promise<void> {
   }
 
   await sleep(800);
-}
-
-/** Also handles the trade-complete shiny reveal screen (#btn-trade-continue) */
-export async function handleShinyExtended(page: Page): Promise<void> {
-  const tradeContinue = await clickSel(page, "#btn-trade-continue");
-  if (!tradeContinue) {
-    await handleShiny(page);
-  } else {
-    logAction("shiny", "Trade reveal — continuing");
-  }
-  await sleep(800);
-}
+};

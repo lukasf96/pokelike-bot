@@ -1,8 +1,7 @@
-import type { Page } from "puppeteer";
-
+import type { Handler } from "../state/handler.js";
 import { clickFirst, sleep } from "../page-utils.js";
 
-export async function handleGameOver(page: Page): Promise<void> {
+export const handleGameOver: Handler = async (_tick, { page }) => {
   await clickFirst(page, "#gameover-screen button");
   await sleep(500);
-}
+};

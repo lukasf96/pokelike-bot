@@ -1,16 +1,14 @@
-import type { Page } from "puppeteer";
-
+import type { Handler } from "../state/handler.js";
 import { logAction } from "../logger.js";
-import { isBattleDefeatContinueButton, logRunEnd } from "../run-log.js";
 import { clickSel, sleep } from "../page-utils.js";
 
-export async function handleBattle(page: Page): Promise<void> {
-  const skipVisible = await page.evaluate((): boolean => {
-    const btn = document.getElementById("btn-auto-battle") as HTMLButtonElement | null;
-    return btn !== null && btn.style.display !== "none" && !btn.disabled;
-  });
-
-  if (skipVisible) {
+/**
+ * Defeat detection (`tick.ui.battle.isDefeat`) is consumed by `RunMachine` to emit
+ * `run-ended`. This handler is purely UI-advancing.
+ */
+export const handleBattle: Handler = async (tick, { page }) => {
+  const battle = tick.ui.battle;
+  if (battle?.skipVisible) {
     logAction("battle", "Clicking Skip");
     await clickSel(page, "#btn-auto-battle");
     await page
@@ -28,12 +26,11 @@ export async function handleBattle(page: Page): Promise<void> {
   });
 
   if (continueVisible) {
-    if (await isBattleDefeatContinueButton(page)) {
-      logAction("battle", "Run lost — logging, then Continue…");
-      await logRunEnd(page, "lost");
+    if (battle?.isDefeat) {
+      logAction("battle", "Run lost — Continue…");
     }
     logAction("battle", "Clicking Continue");
     await clickSel(page, "#btn-continue-battle");
     await sleep(800);
   }
-}
+};

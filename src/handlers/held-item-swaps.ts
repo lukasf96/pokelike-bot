@@ -4,32 +4,11 @@ import { logAction } from "../logger.js";
 import {
   heldItemFitnessAtSlot,
   optimalHeldItemPermutation,
-  type TeamMemberForItem,
 } from "../item-intel.js";
-import { readGameState } from "../game-state.js";
+import type { HandlerCtx } from "../state/handler.js";
+import { selectItemTeam } from "../state/selectors.js";
+import type { Tick } from "../state/types.js";
 import { sleep } from "../page-utils.js";
-
-function gsTeam(gs: Awaited<ReturnType<typeof readGameState>>): TeamMemberForItem[] {
-  return gs.team.map((p) => ({
-    types: p.types,
-    baseStats: p.baseStats,
-    level: p.level,
-    speciesId: p.speciesId,
-    currentHp: p.currentHp,
-    maxHp: p.maxHp,
-    heldItem: p.heldItem ?? undefined,
-  }));
-}
-
-async function readTeamBagSnapshot(page: Page): Promise<{ team: TeamMemberForItem[]; bag: { idx: number; id: string; usable: boolean }[] }> {
-  const gs = await readGameState(page);
-  return { team: gsTeam(gs), bag: gs.items };
-}
-
-async function readTeamForItems(page: Page): Promise<TeamMemberForItem[]> {
-  const gs = await readGameState(page);
-  return gsTeam(gs);
-}
 
 /** Click `#item-bar` badge at `bagBadgeIdx` (same order as `state.items`), then Equip/Swap onto `slotIdx`. */
 async function equipBagHeldItemOntoSlot(page: Page, bagBadgeIdx: number, slotIdx: number): Promise<boolean> {
@@ -91,8 +70,9 @@ async function performOneHeldSwap(page: Page, teamIdxSource: number, teamIdxTarg
  * After completing a map node we're back on the map: reshuffle held items among holders
  * when total `heldItemFitnessAtSlot` improves (see pokelike `openItemEquipModal` swap flow).
  */
-export async function maybeOptimizeHeldItemSwaps(page: Page): Promise<void> {
-  const team = await readTeamForItems(page);
+export async function maybeOptimizeHeldItemSwaps(initialTick: Tick, ctx: HandlerCtx): Promise<void> {
+  if (!initialTick.game) return;
+  const team = selectItemTeam(initialTick.game);
   const opt = optimalHeldItemPermutation(team);
   if (!opt) return;
 
@@ -112,7 +92,7 @@ export async function maybeOptimizeHeldItemSwaps(page: Page): Promise<void> {
     const u = cur.findIndex((c, ti) => ti !== t && c === need);
     if (u < 0) break;
 
-    const ok = await performOneHeldSwap(page, slots[t]!, slots[u]!);
+    const ok = await performOneHeldSwap(ctx.page, slots[t]!, slots[u]!);
     if (!ok) {
       logAction("held-swaps", `Aborted (UI) after ${steps} swap(s)`);
       return;
@@ -134,12 +114,15 @@ export async function maybeOptimizeHeldItemSwaps(page: Page): Promise<void> {
  * Pull equipable held items out of the bag (`state.items`, non-`usable`): fill empty hands first,
  * then replace only when `heldItemFitnessAtSlot` does not drop (same rule as non-negative swaps).
  */
-export async function maybeEquipBagHeldItems(page: Page): Promise<void> {
+export async function maybeEquipBagHeldItems(initialTick: Tick, ctx: HandlerCtx): Promise<void> {
   let moves = 0;
   const maxIter = 28;
+  let tick: Tick = initialTick;
 
   for (let iter = 0; iter < maxIter; iter += 1) {
-    const { team, bag } = await readTeamBagSnapshot(page);
+    if (!tick.game) break;
+    const team = selectItemTeam(tick.game);
+    const bag = tick.game.bag;
     const equipCandidates = bag.filter((b) => !b.usable && b.id);
     if (equipCandidates.length === 0) break;
 
@@ -185,12 +168,13 @@ export async function maybeEquipBagHeldItems(page: Page): Promise<void> {
 
     if (bagIdx < 0 || slotIdx < 0) break;
 
-    const ok = await equipBagHeldItemOntoSlot(page, bagIdx, slotIdx);
+    const ok = await equipBagHeldItemOntoSlot(ctx.page, bagIdx, slotIdx);
     if (!ok) {
       logAction("held-bag", `UI failed (bag idx ${bagIdx} → slot ${slotIdx})`);
       break;
     }
     moves += 1;
+    tick = await ctx.reobserve();
   }
 
   if (moves > 0) {
