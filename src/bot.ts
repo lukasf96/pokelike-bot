@@ -19,6 +19,7 @@ import { handleTrainer } from "./handlers/trainer.js";
 import { handleTransition } from "./handlers/transition.js";
 import { handleWin } from "./handlers/win.js";
 import { clickFirst, humanDelay, sleep } from "./page-utils.js";
+import { clearSnapshot, snapshotGameState, updateRunSession } from "./run-log.js";
 import { activeScreen, isItemEquipOpen, isMoveTutorOpen, screenText } from "./screen-detection.js";
 
 async function runBot(): Promise<void> {
@@ -51,6 +52,7 @@ async function runBot(): Promise<void> {
 
   while (true) {
     turn++;
+    updateRunSession(run, turn);
 
     let screen: string;
     try {
@@ -64,9 +66,15 @@ async function runBot(): Promise<void> {
     if (screen === "title-screen" && wasInRun && prevScreen !== "title-screen") {
       run++;
       turn = 1;
+      updateRunSession(run, turn);
+      clearSnapshot();
       console.log(`\n${"=".repeat(50)}`);
       console.log(`GAME OVER — Starting Run #${run}`);
       console.log(`${"=".repeat(50)}\n`);
+    }
+
+    if (!["title-screen", "trainer-screen", "starter-screen", "unknown"].includes(screen)) {
+      snapshotGameState(page).catch(() => {});
     }
 
     let tutorOpen = false;
