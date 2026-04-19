@@ -1,12 +1,31 @@
 import type { Page } from "puppeteer";
 
+import {
+  type MapCandidateBrief,
+  type TeamMemberBrief,
+  pickBattlePrepIntel,
+  scoreCandidate,
+  shouldReorderForBattle,
+  computeTeamOrder,
+} from "../battle-intel.js";
 import { sleep } from "../page-utils.js";
 import { dismissTutorial } from "./startup.js";
+
+/** Successful `page.evaluate` snapshot of the map layer (non-empty clickable set). */
+type MapPageOk = {
+  empty: false;
+  lowHp: boolean;
+  hpRatio: number;
+  currentMap: number;
+  eliteIndex: number;
+  team: TeamMemberBrief[];
+  candidates: Array<{ href: string; surfaceKind: string; idx: number }>;
+};
 
 export async function handleMap(page: Page): Promise<void> {
   await dismissTutorial(page);
 
-  const result = await page.evaluate(() => {
+  const snapshot = (await page.evaluate(() => {
     let hpRatio = 1;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,16 +39,26 @@ export async function handleMap(page: Page): Promise<void> {
     }
     const lowHp = hpRatio < 0.6;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const st = (window as any).state;
+    const currentMap = Number(st?.currentMap ?? 0);
+    const eliteIndex = Number(st?.eliteIndex ?? 0);
+    const team: TeamMemberBrief[] = (st?.team ?? []).map((p: { types?: string[] }) => ({
+      types: p.types ?? [],
+    }));
+
     const clickable = Array.from(document.querySelectorAll<SVGGElement>("#map-container g")).filter((g) =>
       (g.getAttribute("style") ?? "").includes("cursor: pointer"),
     );
 
-    if (clickable.length === 0) return { picked: false, log: "no clickable nodes" };
+    if (clickable.length === 0) {
+      return { empty: true as const, reason: "no clickable nodes" };
+    }
 
-    const candidates = clickable.map((g) => {
+    const candidates = clickable.map((g, idx) => {
       const img = g.querySelector<SVGImageElement>("image");
       const href = img?.getAttribute("href") ?? img?.getAttribute("xlink:href") ?? "";
-      const type = href.includes("catchPokemon")
+      const surfaceKind = href.includes("catchPokemon")
         ? "catch"
         : href.includes("grass")
           ? "battle"
@@ -46,36 +75,93 @@ export async function handleMap(page: Page): Promise<void> {
                     : href.includes("tradeIcon")
                       ? "trade"
                       : "unknown";
-      const score =
-        type === "legendary"
-          ? 8
-          : type === "pokecenter"
-            ? lowHp
-              ? 10
-              : -2
-            : type === "catch"
-              ? 4
-              : type === "item" || type === "move_tutor"
-                ? 3
-                : type === "question"
-                  ? 2
-                  : 1;
-      return { g, type, score };
+      return { g, idx, href, surfaceKind };
     });
 
-    candidates.sort((a, b) => b.score - a.score);
-    const best = candidates[0]!;
-    best.g.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    return {
+      empty: false as const,
+      lowHp,
+      hpRatio,
+      currentMap,
+      eliteIndex,
+      team,
+      candidates: candidates.map(({ idx, href, surfaceKind }) => ({ idx, href, surfaceKind })),
+    };
+  })) as MapPageOk | { empty: true; reason: string };
 
-    const summary = candidates.map((c) => `${c.type}(${c.score})`).join(", ");
-    const log = `hp=${Math.round(hpRatio * 100)}% lowHp=${lowHp} | ${summary} → picked ${best.type}`;
-    return { picked: true, log };
-  }) as { picked: boolean; log: string };
-
-  console.log(`  [map] ${result.log}`);
-  if (!result.picked) {
+  if (snapshot.empty || snapshot.candidates.length === 0) {
+    console.log(`  [map] ${"reason" in snapshot ? snapshot.reason : "no candidates"}`);
     await sleep(1500);
     return;
   }
+
+  const context = { currentMap: snapshot.currentMap, eliteIndex: snapshot.eliteIndex };
+
+  let bestIdx = 0;
+  let bestScore = -Infinity;
+  for (let i = 0; i < snapshot.candidates.length; i++) {
+    const c = snapshot.candidates[i]!;
+    const cand: MapCandidateBrief = { href: c.href, surfaceKind: c.surfaceKind };
+    const s = scoreCandidate(snapshot.lowHp, cand, snapshot.team, context);
+    if (s > bestScore) {
+      bestScore = s;
+      bestIdx = i;
+    }
+  }
+
+  const chosen = snapshot.candidates[bestIdx]!;
+  const prep = pickBattlePrepIntel(
+    { href: chosen.href, surfaceKind: chosen.surfaceKind },
+    context,
+  );
+
+  if (shouldReorderForBattle(prep.intel, prep.enemyTypings)) {
+    const order = computeTeamOrder(snapshot.team, prep.leadEnemyTypes);
+    await page.evaluate((permutation: number[]) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const st = (window as any).state;
+      const team = st?.team;
+      if (!Array.isArray(team) || team.length === 0) return;
+      const next = permutation.map((i) => team[i]).filter(Boolean);
+      if (next.length !== team.length) return;
+      team.splice(0, team.length, ...next);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rtb = (window as any).renderTeamBar;
+      if (typeof rtb === "function") rtb(team);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const save = (window as any).saveRun;
+      if (typeof save === "function") save();
+    }, order);
+    const detail =
+      prep.intel.category === "trainer"
+        ? ` (${prep.intel.key})`
+        : prep.intel.category === "gym"
+          ? ` (map ${prep.intel.mapIndex})`
+          : prep.intel.category === "elite"
+            ? ` (elite ${prep.intel.eliteIndex})`
+            : "";
+    console.log(`  [map] team order → [${order.join(",")}] for ${prep.intel.category}${detail}`);
+  }
+
+  await page.evaluate((pickIndex: number) => {
+    const clickable = Array.from(document.querySelectorAll<SVGGElement>("#map-container g")).filter((g) =>
+      (g.getAttribute("style") ?? "").includes("cursor: pointer"),
+    );
+    const best = clickable[pickIndex];
+    best?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  }, bestIdx);
+
+  const summary = snapshot.candidates
+    .map((c, i) => {
+      const cand: MapCandidateBrief = { href: c.href, surfaceKind: c.surfaceKind };
+      const sc = scoreCandidate(snapshot.lowHp, cand, snapshot.team, context);
+      return `${c.surfaceKind}(${sc.toFixed(1)})`;
+    })
+    .join(", ");
+
+  console.log(
+    `  [map] hp=${Math.round(snapshot.hpRatio * 100)}% lowHp=${snapshot.lowHp} map=${snapshot.currentMap} eliteIdx=${snapshot.eliteIndex} | ${summary} → picked ${chosen.surfaceKind} score=${bestScore.toFixed(1)}`,
+  );
+
   await sleep(1200);
 }
