@@ -11,7 +11,8 @@ import { typeEffectiveness, attackingStabTypes } from "./battle-intel.js";
  * Boss types for maps 0–8 (indexed by mapIndex). Used to reward type coverage.
  * Sourced from GYM_FIRST_LEAD_TYPES / GYM_TEAM_TYPES / ELITE_TEAM_TYPES in battle-intel.ts.
  */
-const BOSS_TYPES_BY_MAP: readonly string[][] = [
+/** Boss typings for maps 0–8; shared with release/trade candidate logic. */
+export const BOSS_TYPES_BY_MAP: readonly string[][] = [
   ["Rock", "Ground"],         // Map 0 – Brock
   ["Water", "Psychic"],       // Map 1 – Misty
   ["Electric"],               // Map 2 – Lt. Surge

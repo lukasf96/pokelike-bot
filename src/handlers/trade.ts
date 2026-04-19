@@ -1,37 +1,41 @@
 import type { Page } from "puppeteer";
 
-import { avgBstCatchPool } from "../catch-pool.js";
-import { GEN1_SPECIES_BST } from "../data/gen1-species.js";
+import type { ReleaseTeamMember } from "../release-candidate-intel.js";
+import {
+  isHardProtectedRelease,
+  tradeAdjustedGainForSlot,
+} from "../release-candidate-intel.js";
 import { clickSel, sleep } from "../page-utils.js";
 
-function monPowerScore(level: number, speciesId: number): number {
-  const bst = GEN1_SPECIES_BST[speciesId] ?? 360;
-  return bst * Math.sqrt(Math.max(1, level));
-}
-
-function expectedOfferPowerScore(mapIndex: number, tradeFromLevel: number): number {
-  const avgBst = avgBstCatchPool(mapIndex);
-  const offerLv = Math.min(100, tradeFromLevel + 3);
-  return avgBst * Math.sqrt(offerLv);
-}
+/** B5: expected single-mon swing should clear variance + coverage cost. */
+const MIN_TRADE_ADJUSTED_GAIN = 60;
 
 /**
  * game.js doTradeNode: offer is random from getCatchChoices (same BST bucket as map),
- * 3 levels higher — accept when expected value clearly beats the released member.
+ * 3 levels higher — accept when adjusted gain (raw − coverage penalties) beats threshold.
  */
 export async function handleTrade(page: Page): Promise<void> {
   const snap = await page.evaluate(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const st = (window as any).state;
     const mapIndex = Number(st?.currentMap ?? 0);
-    const team = (st?.team ?? []) as Array<{ level?: number; speciesId?: number }>;
-    return {
-      mapIndex,
-      team: team.map((p) => ({
-        level: Number(p.level ?? 1),
-        speciesId: Number(p.speciesId ?? 0),
-      })),
-    };
+    const rawTeam = (st?.team ?? []) as Array<{
+      level?: number;
+      speciesId?: number;
+      isShiny?: boolean;
+      heldItem?: { id?: string } | null;
+      moveTier?: number;
+    }>;
+    const rawItems = (st?.items ?? []) as Array<{ id?: string }>;
+    const moonStoneInBag = rawItems.some((it) => String(it.id ?? "") === "moon_stone");
+    const team: ReleaseTeamMember[] = rawTeam.map((p) => ({
+      speciesId: Number(p.speciesId ?? 0),
+      level: Number(p.level ?? 1),
+      isShiny: Boolean(p.isShiny),
+      heldItemId: p.heldItem?.id != null ? String(p.heldItem.id) : null,
+      moveTier: Math.max(0, Math.min(2, Number(p.moveTier ?? 0))),
+    }));
+    return { mapIndex, team, moonStoneInBag };
   });
 
   if (snap.team.length === 0) {
@@ -41,29 +45,29 @@ export async function handleTrade(page: Page): Promise<void> {
   }
 
   let bestIdx = -1;
-  let bestGain = 0;
+  let bestGain = -Infinity;
   for (let i = 0; i < snap.team.length; i++) {
     const m = snap.team[i]!;
-    const cur = monPowerScore(m.level, m.speciesId);
-    const exp = expectedOfferPowerScore(snap.mapIndex, m.level);
-    const gain = exp - cur;
-    if (gain > bestGain) {
-      bestGain = gain;
+    if (isHardProtectedRelease(m, snap.moonStoneInBag)) continue;
+    const adj = tradeAdjustedGainForSlot(snap.team, i, snap.mapIndex);
+    if (adj > bestGain) {
+      bestGain = adj;
       bestIdx = i;
     }
   }
 
-  const minGain = 20;
-  if (bestIdx >= 0 && bestGain >= minGain) {
+  if (bestIdx >= 0 && bestGain >= MIN_TRADE_ADJUSTED_GAIN) {
     console.log(
-      `  [trade] Accepting slot ${bestIdx} (expected BST×√L gain ~${bestGain.toFixed(0)} vs release)`,
+      `  [trade] Accepting slot ${bestIdx} (adjusted gain ~${bestGain.toFixed(0)} ≥ ${MIN_TRADE_ADJUSTED_GAIN})`,
     );
     await page.evaluate((idx: number) => {
       const rows = document.querySelectorAll<HTMLElement>("#trade-team-list .trade-member-row");
       rows[idx]?.click();
     }, bestIdx);
   } else {
-    console.log(`  [trade] Skipping (best gain ${bestGain.toFixed(0)} < ${minGain})`);
+    console.log(
+      `  [trade] Skipping (best adjusted gain ${bestGain === -Infinity ? "n/a" : bestGain.toFixed(0)} < ${MIN_TRADE_ADJUSTED_GAIN} or no eligible slot)`,
+    );
     await clickSel(page, "#btn-skip-trade");
   }
 
