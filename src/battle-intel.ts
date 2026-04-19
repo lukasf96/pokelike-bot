@@ -360,12 +360,23 @@ export function scoreCandidate(
   else if (cand.surfaceKind === "catch") base = 4;
   else if (cand.surfaceKind === "item" || cand.surfaceKind === "move_tutor") base = 3;
   else if (cand.surfaceKind === "question") base = expectedQuestionMarkSurfaceBase();
-  else if (cand.surfaceKind === "battle") base = 1;
+  else if (
+    cand.surfaceKind === "battle" ||
+    cand.surfaceKind === "trainer" ||
+    cand.surfaceKind === "gym" ||
+    cand.surfaceKind === "elite"
+  )
+    base = 1;
   else if (cand.surfaceKind === "trade") base = 1;
 
   const intel = inferNodeIntel(cand.href, context);
   const typings =
-    intel.category === "neutral" && (cand.surfaceKind === "battle" || cand.surfaceKind === "unknown")
+    intel.category === "neutral" &&
+    (cand.surfaceKind === "battle" ||
+      cand.surfaceKind === "trainer" ||
+      cand.surfaceKind === "gym" ||
+      cand.surfaceKind === "elite" ||
+      cand.surfaceKind === "unknown")
       ? []
       : enemyTypingsForIntel(intel, context);
 

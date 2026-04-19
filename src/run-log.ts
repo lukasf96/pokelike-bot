@@ -3,6 +3,7 @@ import path from "node:path";
 
 import type { Page } from "puppeteer";
 
+import { POKE_CURRENT_RUN_LS_KEY } from "./constants.js";
 import { logAction, logError } from "./logger.js";
 
 export interface RunLogTeamMember {
@@ -39,6 +40,8 @@ interface GameSnapshot {
   badges: number | null;
   eliteIndex: number | null;
   teamHpRatio: number | null;
+  /** Current route map index (0–8); used when localStorage was cleared before defeat logging. */
+  currentMap: number | null;
 }
 
 // ── Node-side state ──────────────────────────────────────────────────────────
@@ -63,20 +66,21 @@ export function updateRunSession(run: number, turn: number): void {
 // ── Browser-side snapshot ────────────────────────────────────────────────────
 
 /**
- * Read game state from localStorage["poke_current_run"] (written by saveRun() in game.js).
- * Called each bot turn so the Node-side cache stays fresh. The cache survives defeat because
- * clearSavedRun() fires before our handler runs, but our cached copy is already in Node memory.
+ * Reads `poke_current_run` into the Node-side cache.
+ * Keeps badges / map index / elite index even when `team` is temporarily empty after a wipe.
+ * If the save has an empty team but we still hold a roster from the previous tick, merge that roster
+ * so defeat logs stay useful.
  */
 export async function snapshotGameState(page: Page): Promise<void> {
-  const snap = await page.evaluate((): GameSnapshot | null => {
+  const snap = await page.evaluate((lsKey): GameSnapshot | null => {
     try {
-      const raw = localStorage.getItem("poke_current_run");
+      const raw = localStorage.getItem(lsKey);
       if (!raw) return null;
       const state = JSON.parse(raw) as Record<string, unknown>;
       const rawTeam = state.team;
-      if (!Array.isArray(rawTeam) || rawTeam.length === 0) return null;
+      const rawTeamArr = Array.isArray(rawTeam) ? (rawTeam as Array<Record<string, unknown>>) : [];
 
-      const team = (rawTeam as Array<Record<string, unknown>>).map((p) => {
+      const team = rawTeamArr.map((p) => {
         const held = p.heldItem as { id?: string } | null | undefined;
         return {
           speciesId: Number(p.speciesId ?? 0),
@@ -91,23 +95,37 @@ export async function snapshotGameState(page: Page): Promise<void> {
 
       let tot = 0;
       let mx = 0;
-      for (const p of rawTeam as Array<Record<string, unknown>>) {
+      for (const p of rawTeamArr) {
         tot += Number(p.currentHp ?? 0);
         mx += Number(p.maxHp ?? 0);
       }
+
+      const cmRaw = Number(state.currentMap ?? NaN);
+      const currentMap = Number.isFinite(cmRaw) && cmRaw >= 0 ? cmRaw : null;
 
       return {
         team,
         badges: typeof state.badges === "number" ? state.badges : null,
         eliteIndex: typeof state.eliteIndex === "number" ? state.eliteIndex : null,
         teamHpRatio: mx > 0 ? tot / mx : null,
+        currentMap,
       };
     } catch {
       return null;
     }
-  });
+  }, POKE_CURRENT_RUN_LS_KEY);
 
-  if (snap) lastSnapshot = snap;
+  if (!snap) return;
+
+  if (snap.team.length === 0 && lastSnapshot && lastSnapshot.team.length > 0) {
+    lastSnapshot = {
+      ...snap,
+      team: lastSnapshot.team,
+      teamHpRatio: lastSnapshot.teamHpRatio,
+    };
+  } else {
+    lastSnapshot = snap;
+  }
 }
 
 export function clearSnapshot(): void {
@@ -116,60 +134,71 @@ export function clearSnapshot(): void {
 
 // ── Defeat context ────────────────────────────────────────────────────────────
 
-/**
- * Read the battle screen DOM to figure out who just defeated us.
- * Must be called before the game clears the battle screen.
- */
-async function readDefeatContext(page: Page): Promise<DefeatContext | null> {
-  const cachedElite = lastSnapshot?.eliteIndex ?? -1;
+interface DefeatReadPayload {
+  lsKey: string;
+  fallbackMapIndex: number;
+  fallbackEliteIndex: number;
+}
 
-  return page.evaluate(
-    (eliteIndex: number): DefeatContext | null => {
+/**
+ * Parse battle title/subtitle; prefers localStorage map/elite index, falls back to last snapshot.
+ */
+async function readDefeatContext(page: Page, payload: DefeatReadPayload): Promise<DefeatContext | null> {
+  return page.evaluate((ctx: DefeatReadPayload): DefeatContext | null => {
     const title = (document.getElementById("battle-title")?.textContent ?? "").trim();
     const subtitle = (document.getElementById("battle-subtitle")?.textContent ?? "").trim();
     if (!title) return null;
 
-    let mapIndex = -1;
+    let mapIndex = ctx.fallbackMapIndex >= 0 ? ctx.fallbackMapIndex : -1;
+    let eliteIdx = ctx.fallbackEliteIndex >= 0 ? ctx.fallbackEliteIndex : -1;
     try {
-      const raw = localStorage.getItem("poke_current_run");
-      if (raw) mapIndex = Number((JSON.parse(raw) as Record<string, unknown>).currentMap ?? -1);
-    } catch { /* ignore */ }
+      const raw = localStorage.getItem(ctx.lsKey);
+      if (raw) {
+        const st = JSON.parse(raw) as Record<string, unknown>;
+        const cm = Number(st.currentMap ?? NaN);
+        if (Number.isFinite(cm) && cm >= 0) mapIndex = cm;
+        const ei = Number(st.eliteIndex ?? NaN);
+        if (Number.isFinite(ei) && ei >= 0) eliteIdx = ei;
+      }
+    } catch {
+      /* ignore */
+    }
 
-    // Wild Pokemon: "Wild Pidgey appeared!"
     const wild = title.match(/^Wild\s+(.+?)\s+appeared!$/i);
     if (wild) {
       const levelMatch = subtitle.match(/Level\s+(\d+)/i);
       return { kind: "wild", pokemon: wild[1]!, level: levelMatch ? Number(levelMatch[1]) : 0 };
     }
 
-    // Legendary: "A legendary Zapdos appeared!"
     const legendary = title.match(/^A legendary\s+(.+?)\s+appeared!$/i);
     if (legendary) {
       const levelMatch = subtitle.match(/Lv\s+(\d+)/i);
       return { kind: "wild", pokemon: legendary[1]!, level: levelMatch ? Number(levelMatch[1]) : 0 };
     }
 
-    // Gym Battle: "Gym Battle vs Misty!"
     const gym = title.match(/^Gym Battle vs\s+(.+?)!$/i);
     if (gym) {
       const badgeMatch = subtitle.match(/^(.+?)\s+is on the line!$/i);
       return { kind: "gym", leader: gym[1]!, badge: badgeMatch ? badgeMatch[1]! : "", mapIndex };
     }
 
-    // Elite Four / Champion: "Elite Four: Lorelei!" or "Champion: Blue!"
-    const elite = title.match(/^(.+?):\s+(.+?)!$/);
-    if (elite) {
-      return { kind: "elite", title: elite[1]!, name: elite[2]!, eliteIndex };
+    const eliteMatch = title.match(/^(.+?):\s+(.+?)!$/);
+    if (eliteMatch) {
+      return {
+        kind: "elite",
+        title: eliteMatch[1]!,
+        name: eliteMatch[2]!,
+        eliteIndex: eliteIdx,
+      };
     }
 
-    // Trainer: "Youngster Joey wants to battle!"
     const trainer = title.match(/^(.+?)\s+wants to battle!$/i);
     if (trainer) {
       return { kind: "trainer", name: trainer[1]! };
     }
 
     return { kind: "unknown", battleTitle: title, battleSubtitle: subtitle };
-  }, cachedElite) as Promise<DefeatContext | null>;
+  }, payload);
 }
 
 // ── File I/O ─────────────────────────────────────────────────────────────────
@@ -189,11 +218,18 @@ function appendRunLog(entry: RunLogEntry): void {
 }
 
 export async function logRunEnd(page: Page, outcome: "won" | "lost"): Promise<void> {
-  // Capture defeat context while the battle DOM is still intact.
-  const defeatContext = outcome === "lost" ? await readDefeatContext(page) : null;
-
-  // Try one final live state read, then fall back to cached snapshot.
   await snapshotGameState(page);
+
+  const defeatContext =
+    outcome === "lost"
+      ? await readDefeatContext(page, {
+          lsKey: POKE_CURRENT_RUN_LS_KEY,
+          fallbackMapIndex: lastSnapshot?.currentMap ?? -1,
+          fallbackEliteIndex:
+            typeof lastSnapshot?.eliteIndex === "number" ? lastSnapshot.eliteIndex : -1,
+        })
+      : null;
+
   const snap = lastSnapshot;
 
   appendRunLog({

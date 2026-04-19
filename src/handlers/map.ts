@@ -18,6 +18,24 @@ import { maybeEquipBagHeldItems, maybeOptimizeHeldItemSwaps } from "./held-item-
 import { maybeUseUsableItems } from "./usable-item.js";
 import { dismissTutorial } from "./startup.js";
 
+/**
+ * Filename stems from pokelike `map.js` — trainer nodes use `sprites/<key>.png` (not `grass.png`).
+ * Gym bosses use `GYM_LEADER_SPRITES`; Elite champion layer uses `champ.png`.
+ */
+const MAP_SURFACE_STEMS_PAYLOAD = {
+  trainerStems: [
+    "acetrainer",
+    "bugcatcher",
+    "firespitter",
+    "fisher",
+    "hiker",
+    "oldguy",
+    "policeman",
+    "scientist",
+    "teamrocket",
+  ],
+  gymStems: ["brock", "misty", "lt. surge", "erika", "koga", "sabrina", "blaine", "giovanni"],
+} as const;
 
 export async function handleMap(page: Page): Promise<void> {
   await dismissTutorial(page);
@@ -27,35 +45,74 @@ export async function handleMap(page: Page): Promise<void> {
 
   const [gs, domResult] = await Promise.all([
     readGameState(page),
-    page.evaluate((): { empty: true; reason: string } | { empty: false; candidates: Array<{ href: string; surfaceKind: string; idx: number }> } => {
-      const clickable = Array.from(document.querySelectorAll<SVGGElement>("#map-container g")).filter((g) =>
-        (g.getAttribute("style") ?? "").includes("cursor: pointer"),
-      );
-      if (clickable.length === 0) return { empty: true, reason: "no clickable nodes" };
-      const candidates = clickable.map((g, idx) => {
-        const img = g.querySelector<SVGImageElement>("image");
-        const href = img?.getAttribute("href") ?? img?.getAttribute("xlink:href") ?? "";
-        const surfaceKind = href.includes("catchPokemon")
-          ? "catch"
-          : href.includes("grass")
-            ? "battle"
-            : href.includes("itemIcon")
-              ? "item"
-              : href.includes("Poke Center") || href.includes("PokeCenter")
-                ? "pokecenter"
-                : href.includes("moveTutor")
-                  ? "move_tutor"
-                  : href.includes("legendaryEncounter")
-                    ? "legendary"
-                    : href.includes("questionMark")
-                      ? "question"
-                      : href.includes("tradeIcon")
-                        ? "trade"
-                        : "unknown";
-        return { idx, href, surfaceKind };
-      });
-      return { empty: false, candidates };
-    }),
+    page.evaluate(
+      (payload: { trainerStems: readonly string[]; gymStems: readonly string[] }): {
+        empty: true;
+        reason: string;
+      } | {
+        empty: false;
+        candidates: Array<{ href: string; surfaceKind: string; idx: number }>;
+      } => {
+        const trainerSet = new Set(payload.trainerStems);
+        const gymSet = new Set(payload.gymStems);
+
+        const clickable = Array.from(document.querySelectorAll<SVGGElement>("#map-container g")).filter((g) =>
+          (g.getAttribute("style") ?? "").includes("cursor: pointer"),
+        );
+        if (clickable.length === 0) return { empty: true, reason: "no clickable nodes" };
+        const candidates = clickable.map((g, idx) => {
+          const img = g.querySelector<SVGImageElement>("image");
+          const hrefRaw = img?.getAttribute("href") ?? img?.getAttribute("xlink:href") ?? "";
+
+          let pathDecoded = hrefRaw;
+          try {
+            pathDecoded = decodeURIComponent(hrefRaw.split("?")[0] ?? "");
+          } catch {
+            pathDecoded = hrefRaw.split("?")[0] ?? "";
+          }
+          const stemMatch = pathDecoded.match(/([^/]+)\.(png|gif|webp)$/i);
+          const stem = (stemMatch?.[1] ?? "").replace(/%20/gi, " ").trim().toLowerCase();
+
+          /** Decode path so `Poke%20Center.png` matches poke center checks (same as stem). */
+          let pathForIncludes = "";
+          try {
+            pathForIncludes = decodeURIComponent((hrefRaw || "").split("?")[0] ?? "").toLowerCase();
+          } catch {
+            pathForIncludes = ((hrefRaw || "").split("?")[0] ?? "").toLowerCase();
+          }
+
+          const surfaceKind = pathForIncludes.includes("catchpokemon")
+            ? "catch"
+            : pathForIncludes.includes("grass")
+              ? "battle"
+              : pathForIncludes.includes("itemicon")
+                ? "item"
+                : pathForIncludes.includes("poke center") || pathForIncludes.includes("pokecenter")
+                  ? "pokecenter"
+                  : pathForIncludes.includes("movetutor")
+                    ? "move_tutor"
+                    : pathForIncludes.includes("legendaryencounter")
+                      ? "legendary"
+                      : pathForIncludes.includes("questionmark")
+                        ? "question"
+                        : pathForIncludes.includes("tradeicon")
+                          ? "trade"
+                          : stem === "champ"
+                            ? "elite"
+                            : trainerSet.has(stem)
+                              ? "trainer"
+                              : gymSet.has(stem)
+                                ? "gym"
+                                : stem === "poke center"
+                                  ? "pokecenter"
+                                  : "unknown";
+
+          return { idx, href: hrefRaw, surfaceKind };
+        });
+        return { empty: false, candidates };
+      },
+      MAP_SURFACE_STEMS_PAYLOAD,
+    ),
   ]);
 
   let nFainted = 0;
@@ -125,14 +182,42 @@ export async function handleMap(page: Page): Promise<void> {
         ? computeTeamOrderForQuestionMark(snapshot.team, context)
         : computeTeamOrder(snapshot.team, prep.leadTypingsPool);
     await page.evaluate((permutation: number[]) => {
-      const w = window as unknown as { state: { team: unknown[] }; renderTeamBar?: (t: unknown[]) => void; saveRun?: () => void };
-      const team = w.state?.team;
+      let team: unknown[] | undefined;
+      try {
+        const st = new Function(
+          "try { return typeof state !== 'undefined' ? state : undefined; } catch (e) { return undefined; }",
+        )() as { team?: unknown[] } | undefined;
+        team = st?.team as unknown[] | undefined;
+      } catch {
+        /* ignore */
+      }
+      const win = window as unknown as { state?: { team?: unknown[] } };
+      if (!Array.isArray(team) || team.length === 0) team = win.state?.team;
       if (!Array.isArray(team) || team.length === 0) return;
-      const next = permutation.map((i) => team[i]).filter(Boolean);
+
+      const next = permutation.map((i) => team![i]).filter(Boolean);
       if (next.length !== team.length) return;
       team.splice(0, team.length, ...next);
-      if (typeof w.renderTeamBar === "function") w.renderTeamBar(team);
-      if (typeof w.saveRun === "function") w.saveRun();
+
+      let renderTeamBarRef: unknown;
+      try {
+        renderTeamBarRef = new Function(
+          "try { return typeof renderTeamBar !== 'undefined' ? renderTeamBar : undefined; } catch (e) { return undefined; }",
+        )();
+      } catch {
+        renderTeamBarRef = undefined;
+      }
+      if (typeof renderTeamBarRef === "function") (renderTeamBarRef as (t: unknown[]) => void)(team);
+
+      let saveRunRef: unknown;
+      try {
+        saveRunRef = new Function(
+          "try { return typeof saveRun !== 'undefined' ? saveRun : undefined; } catch (e) { return undefined; }",
+        )();
+      } catch {
+        saveRunRef = undefined;
+      }
+      if (typeof saveRunRef === "function") (saveRunRef as () => void)();
     }, order);
     const detail =
       chosen.surfaceKind === "question"

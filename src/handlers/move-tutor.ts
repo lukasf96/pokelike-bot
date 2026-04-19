@@ -1,25 +1,17 @@
 import type { Page } from "puppeteer";
 
+import { readGameState } from "../game-state.js";
 import { logAction } from "../logger.js";
 import { sleep } from "../page-utils.js";
 import { pickTutorSlot, type TutorTeamSlot } from "../tutor-intel.js";
 
-interface GameStateShape {
-  team?: TutorTeamSlot[];
-}
-
 export async function handleMoveTutor(page: Page): Promise<void> {
-  const team = await page.evaluate((): TutorTeamSlot[] => {
-    const st = (window as unknown as { state?: GameStateShape }).state;
-    const raw = st?.team;
-    if (!raw || !Array.isArray(raw)) return [];
-
-    return raw.map((p) => ({
-      speciesId: Number(p.speciesId),
-      level: Math.max(1, Number(p.level)),
-      moveTier: p.moveTier !== undefined ? Number(p.moveTier) : undefined,
-    }));
-  });
+  const gs = await readGameState(page);
+  const team: TutorTeamSlot[] = gs.team.map((p) => ({
+    speciesId: p.speciesId,
+    level: Math.max(1, p.level),
+    moveTier: p.moveTier,
+  }));
 
   const chosenIdx = pickTutorSlot(team);
 
