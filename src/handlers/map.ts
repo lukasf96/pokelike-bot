@@ -119,7 +119,7 @@ export async function handleMap(page: Page): Promise<void> {
   );
 
   if (shouldReorderForBattle(prep.intel, prep.enemyTypings)) {
-    const order = computeTeamOrder(snapshot.team, prep.leadEnemyTypes);
+    const order = computeTeamOrder(snapshot.team, prep.leadTypingsPool);
     await page.evaluate((permutation: number[]) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const st = (window as any).state;
@@ -142,7 +142,13 @@ export async function handleMap(page: Page): Promise<void> {
           ? ` (map ${prep.intel.mapIndex})`
           : prep.intel.category === "elite"
             ? ` (elite ${prep.intel.eliteIndex})`
-            : "";
+            : prep.intel.category === "wild"
+              ? ` (map ${prep.intel.mapIndex})`
+              : prep.intel.category === "legendary"
+                ? " (legendary)"
+                : prep.intel.category === "dynamic_trainer"
+                  ? ` (dyn map ${prep.intel.mapIndex})`
+                  : "";
     console.log(`  [map] team order → [${order.join(",")}] for ${prep.intel.category}${detail}`);
   }
 
