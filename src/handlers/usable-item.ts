@@ -1,8 +1,14 @@
 import type { Page } from "puppeteer";
 
+import {
+  attackingStabTypes,
+  bossLevelStats,
+  typeEffectiveness,
+} from "../battle-intel.js";
+import { BOSS_TYPES_BY_MAP } from "../catch-intel.js";
 import { CROSS_SPECIES_EVOLUTION_BST, GEN1_EVOLUTIONS } from "../data/gen1-evolutions.js";
 import { logAction } from "../logger.js";
-import { GEN1_SPECIES_BST } from "../data/gen1-species.js";
+import { GEN1_SPECIES_BST, GEN1_SPECIES_TYPES } from "../data/gen1-species.js";
 import type { TeamMemberForItem } from "../item-intel.js";
 import type { HandlerCtx } from "../state/handler.js";
 import { selectItemTeam } from "../state/selectors.js";
@@ -55,6 +61,34 @@ function estimatedMoonStoneBstGain(m: TeamMemberForItem): number {
   return intoTotal - sumBst(m);
 }
 
+/**
+ * Best counter among the team for the current map's boss: anyone whose STAB
+ * is super-effective vs at least one boss typing. Returns indices ordered by
+ * (matchup quality desc, level asc) so we boost the under-levelled counter
+ * rather than over-feeding the already-strong one.
+ */
+function bossCounterIndices(team: TeamMemberForItem[], currentMap: number): number[] {
+  const bossTypes = BOSS_TYPES_BY_MAP[Math.min(currentMap, BOSS_TYPES_BY_MAP.length - 1)] ?? [];
+  if (bossTypes.length === 0) return [];
+
+  const ranked: Array<{ idx: number; matchup: number; level: number }> = [];
+  for (let i = 0; i < team.length; i++) {
+    const m = team[i]!;
+    if (m.level >= 100) continue;
+    const types = GEN1_SPECIES_TYPES[m.speciesId] ?? m.types;
+    let best = 0;
+    for (const stab of attackingStabTypes(types)) {
+      for (const bt of bossTypes) {
+        const eff = typeEffectiveness(stab, [bt]);
+        if (eff > best) best = eff;
+      }
+    }
+    if (best >= 2) ranked.push({ idx: i, matchup: best, level: m.level });
+  }
+  ranked.sort((a, b) => b.matchup - a.matchup || a.level - b.level);
+  return ranked.map((r) => r.idx);
+}
+
 function pickRareCandySlot(team: TeamMemberForItem[], currentMap: number, candyCount: number, minReserve: number): number {
   const usable = team
     .map((p, i) => ({ p, i }))
@@ -78,6 +112,36 @@ function pickRareCandySlot(team: TeamMemberForItem[], currentMap: number, candyC
     const lu = levelsUntilNaturalEvo(p);
     return lu !== null && lu >= 1 && lu <= 3;
   });
+
+  // Are we under-levelled vs the upcoming boss? If so, candies are best
+  // spent on a Pokémon we'll actually use *in that fight*, not hoarded for
+  // an evolution we may never reach. Diagnostic: Bulbasaur reached Misty
+  // at L11–14 vs Starmie L20 — using candies to push the lead Grass mon
+  // L11→L14+ would close that gap directly.
+  let teamMaxLevel = 0;
+  for (const p of team) if (p.level > teamMaxLevel) teamMaxLevel = p.level;
+  const { maxLevel: bossMaxLevel } = bossLevelStats(currentMap, 0);
+  const levelGap = bossMaxLevel - teamMaxLevel;
+  const counterIdxs = bossCounterIndices(team, currentMap);
+
+  // Step 1: when severely under-levelled, prefer the under-levelled counter
+  // even if not near evolution.
+  if (levelGap >= 3 && counterIdxs.length > 0) {
+    const candidates = counterIdxs
+      .map((i) => ({ p: team[i]!, i }))
+      .filter(({ p }) => p.level < 100);
+    if (candidates.length > 0) {
+      // Prefer near-evo + counter combo; otherwise feed lowest-level counter
+      // so it catches up to the lead.
+      const counterNearEvo = candidates.filter(({ p }) => {
+        const lu = levelsUntilNaturalEvo(p);
+        return lu !== null && lu >= 1 && lu <= 3;
+      });
+      if (counterNearEvo.length > 0) return counterNearEvo[0]!.i;
+      // Sorted lowest-level first (see bossCounterIndices). Feed it.
+      return candidates[0]!.i;
+    }
+  }
 
   if (candyCount <= minReserve) {
     if (nearEvo.length === 0) return -1;
@@ -180,7 +244,15 @@ function planNextUse(snap: UsableSnapshot): NextUse {
   const rareIdx = usableBag.find((b) => b.id === "rare_candy")?.idx;
   if (rareIdx !== undefined) {
     const candyCount = countId("rare_candy");
-    const minReserve = snap.currentMap < 7 ? 2 : 0;
+    // Reserve fewer candies when severely under-levelled — closing the boss
+    // level gap NOW beats saving them for an evolution we may never reach.
+    let teamMaxLevel = 0;
+    for (const p of snap.team) if (p.level > teamMaxLevel) teamMaxLevel = p.level;
+    const { maxLevel: bossMax } = bossLevelStats(snap.currentMap, 0);
+    const levelGap = bossMax - teamMaxLevel;
+    let minReserve = snap.currentMap < 7 ? 2 : 0;
+    if (levelGap >= 3) minReserve = Math.max(0, minReserve - 1);
+    if (levelGap >= 6) minReserve = 0;
     const slot = pickRareCandySlot(snap.team, snap.currentMap, candyCount, minReserve);
     if (slot >= 0) return { itemId: "rare_candy", bagIdx: rareIdx, slotIdx: slot };
   }

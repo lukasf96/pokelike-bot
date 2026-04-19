@@ -127,13 +127,27 @@ export async function maybeOptimizeHeldItemSwaps(initialTick: Tick, ctx: Handler
 }
 
 /**
+ * Minimum strict fitness improvement required to swap the item already on a
+ * holder for one in the bag. The previously-equipped item goes back to the
+ * bag, so a delta of 0 (ties) ping-pongs forever between two near-equivalent
+ * items. 6 mirrors `MIN_HELD_PERM_IMPROVE` in item-intel.
+ */
+const MIN_BAG_REPLACE_IMPROVE = 6;
+
+/**
  * Pull equipable held items out of the bag (`state.items`, non-`usable`): fill empty hands first,
- * then replace only when `heldItemFitnessAtSlot` does not drop (same rule as non-negative swaps).
+ * then replace only when `heldItemFitnessAtSlot` improves by at least `MIN_BAG_REPLACE_IMPROVE`.
  */
 export async function maybeEquipBagHeldItems(initialTick: Tick, ctx: HandlerCtx): Promise<void> {
   let moves = 0;
   const maxIter = 28;
   let tick: Tick = initialTick;
+  // Replacing a held item returns the displaced item back to the bag. If the
+  // scoring is symmetric (e.g. two mons that both want `eviolite`), without
+  // a guard we can equip A→slotN, then B→slotN (displacing A), then
+  // A→slotN again, forever. Track the (sourceItemId, slot) pairs we've
+  // already equipped *this call* and refuse to repeat them.
+  const equippedItemsBySlot = new Map<number, Set<string>>();
 
   for (let iter = 0; iter < maxIter; iter += 1) {
     if (!tick.game) break;
@@ -150,16 +164,22 @@ export async function maybeEquipBagHeldItems(initialTick: Tick, ctx: HandlerCtx)
 
     let bagIdx = -1;
     let slotIdx = -1;
+    let chosenItemId: string | undefined;
+
+    const wasAlreadyEquipped = (slot: number, id: string): boolean =>
+      equippedItemsBySlot.get(slot)?.has(id) === true;
 
     if (emptySlots.length > 0) {
       let bestFit = -Infinity;
       for (const b of equipCandidates) {
         for (const s of emptySlots) {
+          if (wasAlreadyEquipped(s, b.id)) continue;
           const fit = heldItemFitnessAtSlot(b.id, s, team, bossCtx);
           if (fit > bestFit) {
             bestFit = fit;
             bagIdx = b.idx;
             slotIdx = s;
+            chosenItemId = b.id;
           }
         }
       }
@@ -169,21 +189,25 @@ export async function maybeEquipBagHeldItems(initialTick: Tick, ctx: HandlerCtx)
         for (let s = 0; s < team.length; s += 1) {
           const curId = team[s]?.heldItem?.id;
           if (!curId) continue;
+          if (wasAlreadyEquipped(s, b.id)) continue;
           const newFit = heldItemFitnessAtSlot(b.id, s, team, bossCtx);
           const oldFit = heldItemFitnessAtSlot(curId, s, team, bossCtx);
           const delta = newFit - oldFit;
-          if (delta < 0) continue;
+          // Strict improvement only; ties cause ping-pong because the
+          // displaced item returns to the bag and could re-equip next iter.
+          if (delta < MIN_BAG_REPLACE_IMPROVE) continue;
           if (delta > bestDelta) {
             bestDelta = delta;
             bagIdx = b.idx;
             slotIdx = s;
+            chosenItemId = b.id;
           }
         }
       }
-      if (bagIdx < 0 || bestDelta < 0) break;
+      if (bagIdx < 0 || bestDelta < MIN_BAG_REPLACE_IMPROVE) break;
     }
 
-    if (bagIdx < 0 || slotIdx < 0) break;
+    if (bagIdx < 0 || slotIdx < 0 || !chosenItemId) break;
 
     const ok = await equipBagHeldItemOntoSlot(ctx.page, bagIdx, slotIdx);
     if (!ok) {
@@ -191,6 +215,12 @@ export async function maybeEquipBagHeldItems(initialTick: Tick, ctx: HandlerCtx)
       break;
     }
     moves += 1;
+    let slotSet = equippedItemsBySlot.get(slotIdx);
+    if (!slotSet) {
+      slotSet = new Set<string>();
+      equippedItemsBySlot.set(slotIdx, slotSet);
+    }
+    slotSet.add(chosenItemId);
     tick = await ctx.reobserve();
   }
 

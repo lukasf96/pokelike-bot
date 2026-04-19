@@ -7,6 +7,31 @@ import { catchBucketIdsForMap, LEGENDARY_SPECIES_IDS, maxLevelForMap } from "./c
 import { TYPE_CHART } from "./data/type-chart.js";
 import { GEN1_SPECIES_TYPES } from "./data/gen1-species.js";
 import { minLevelForSpecies } from "./data/gen1-min-level.js";
+import { ELITE_ROSTERS, GYM_ROSTERS } from "./data/gym-elite-rosters.js";
+
+/**
+ * Lead level + roster max level for the upcoming boss (gym for currentMap≤7,
+ * elite for currentMap=8). Used by Grind Mode to detect when the team is
+ * dangerously under-levelled and we should detour into trainer/wild fights.
+ */
+export function bossLevelStats(currentMap: number, eliteIndex: number): { leadLevel: number; maxLevel: number } {
+  if (currentMap >= 8) {
+    const idx = Math.min(Math.max(0, eliteIndex), ELITE_ROSTERS.length - 1);
+    const team = ELITE_ROSTERS[idx]?.team ?? [];
+    if (team.length === 0) return { leadLevel: 50, maxLevel: 60 };
+    const lead = team[0]!.level;
+    let mx = lead;
+    for (const s of team) if (s.level > mx) mx = s.level;
+    return { leadLevel: lead, maxLevel: mx };
+  }
+  const idx = Math.min(Math.max(0, currentMap), GYM_ROSTERS.length - 1);
+  const team = GYM_ROSTERS[idx]?.team ?? [];
+  if (team.length === 0) return { leadLevel: 10, maxLevel: 12 };
+  const lead = team[0]!.level;
+  let mx = lead;
+  for (const s of team) if (s.level > mx) mx = s.level;
+  return { leadLevel: lead, maxLevel: mx };
+}
 
 function typesForSpeciesId(id: number): string[] {
   return GEN1_SPECIES_TYPES[id] ?? ["Normal"];
@@ -375,6 +400,14 @@ export interface ScoreCandidateContext extends IntelContext {
   pcAvailable: boolean;
   /** Monte-Carlo win probability against the upcoming boss with current team. */
   pWinBoss: number;
+  /** Highest level of any non-fainted team member (defaults to a high value when missing). */
+  teamMaxLevel?: number;
+  /** Sum of non-fainted team members (defaults to 6 when missing). */
+  aliveTeamSize?: number;
+  /** Boss lead-mon level (e.g. Brock=12, Misty=18). */
+  bossLeadLevel?: number;
+  /** Boss roster max level (e.g. Brock=14, Misty=20). */
+  bossMaxLevel?: number;
 }
 
 export function scoreCandidate(
@@ -391,37 +424,98 @@ export function scoreCandidate(
   const bossImminent = ctx.bossImminent === true;
   const pcAvailable = ctx.pcAvailable === true;
   const pWinBoss = typeof ctx.pWinBoss === "number" ? ctx.pWinBoss : 1;
+  const teamMaxLevel = typeof ctx.teamMaxLevel === "number" ? ctx.teamMaxLevel : 100;
+  const aliveTeamSize = typeof ctx.aliveTeamSize === "number" ? ctx.aliveTeamSize : team.length;
+  const bossLeadLevel = typeof ctx.bossLeadLevel === "number" ? ctx.bossLeadLevel : 10;
+  const bossMaxLevel = typeof ctx.bossMaxLevel === "number" ? ctx.bossMaxLevel : bossLeadLevel + 2;
 
   // Pre-boss urgency mode (boss reachable in 1–2 layers): the Pokemon Center
-  // layer is the *last* heal — refusing it routinely costs the run. Catch
-  // value collapses (no time to level it), Trainer value spikes (only +2 XP
-  // source pre-Map 4 to close the level gap to the boss).
+  // layer is the *last* heal — refusing it routinely costs the run.
   const bossUrgency = bossImminent || (pcAvailable && hpRatio < 0.95);
-  const bossWinShaky = pWinBoss < 0.55;
+  const bossWinShaky = pWinBoss < 0.6;
+
+  // ── Grind Mode ──────────────────────────────────────────────────────────
+  // Empirically, the dominant cause of boss losses (Brock and Misty alike)
+  // is walking into the boss several levels under-levelled. Diagnostic from
+  // last 15 runs: Bulbasaur entered Brock at L6–10 (boss has Onix L14), and
+  // Misty at L11–14 (boss has Starmie L20). When the team's strongest mon
+  // is multiple levels below the boss's strongest mon, route into trainer/
+  // wild XP nodes hard and skip catches/items unless they fix that gap.
+  const levelGap = bossMaxLevel - teamMaxLevel;
+  const grindMode = levelGap >= 3 || (bossWinShaky && !bossImminent);
+  const desperateGrind = levelGap >= 6 || pWinBoss < 0.35;
+  const teamSaturated = aliveTeamSize >= 6;
+  // ── Tiny-Team Mode ──────────────────────────────────────────────────────
+  // Grind Mode without bodies isn't grinding, it's a 1-mon suicide run. If
+  // Bulbasaur faints, the run ends; we need *type variance* before we
+  // start farming XP. These overrides win against Grind Mode below.
+  //   • aliveTeamSize ≤ 2: any catch is gold, even off-typing.
+  //   • aliveTeamSize ≤ 3: still prefer catches over deep grinding.
+  const tinyTeam = aliveTeamSize <= 2;
+  const buildingTeam = aliveTeamSize <= 3;
 
   let base = 1;
 
   if (cand.surfaceKind === "legendary") base = 8;
   else if (cand.surfaceKind === "pokecenter") {
+    // PC is *the* clutch resource. Be much more eager:
+    //   • boss-imminent + HP<95% → emergency heal (60).
+    //   • mid-run HP<80% → strongly prefer (12).
+    //   • mid-run HP<95% with PC available → mild prefer (4).
     if (bossUrgency && hpRatio < 0.95) base = 60;
-    else if (lowHp) base = 10;
+    else if (lowHp) base = 14;
+    else if (hpRatio < 0.8) base = 12;
+    else if (hpRatio < 0.95) base = 4;
     else base = -2;
   } else if (cand.surfaceKind === "catch") {
-    // On the layer immediately before boss, a freshly caught low-level mon
-    // can't help — biased away. Otherwise standard catch value.
-    base = bossImminent ? -3 : 4;
-  } else if (cand.surfaceKind === "item" || cand.surfaceKind === "move_tutor") base = 3;
-  else if (cand.surfaceKind === "question") base = expectedQuestionMarkSurfaceBase();
+    // Catch base reflects three competing forces:
+    //   • Tiny team: must build type coverage NOW (Bulbasaur alone = run loss
+    //     to anything that resists Grass/Poison or 2HKOs through bulk).
+    //   • Coverage urgency: catch-intel scorer adds enemyTypings adjustment
+    //     in `bonus` below, so this is the "default value of any catch slot".
+    //   • Saturation: once full of viable mons, a fresh L5 mon replacing a
+    //     levelled one is a net XP loss — drop sharply.
+    if (tinyTeam) base = 30;
+    else if (buildingTeam) base = 12;
+    else if (bossImminent) base = -3;
+    else if (teamSaturated && !desperateGrind) base = grindMode ? -2 : 1;
+    else if (grindMode) base = 1; // grinding XP > catching for cap closing
+    else base = 4;
+  } else if (cand.surfaceKind === "item" || cand.surfaceKind === "move_tutor") {
+    base = grindMode ? 2 : 3;
+  } else if (cand.surfaceKind === "question") base = expectedQuestionMarkSurfaceBase();
   else if (
     cand.surfaceKind === "battle" ||
     cand.surfaceKind === "trainer" ||
     cand.surfaceKind === "gym" ||
     cand.surfaceKind === "elite"
   ) {
-    // Trainer fights are the only +2 XP source pre-Map 4. When the boss
-    // pWin is shaky and we're not at the boss yet, prefer them.
-    if (cand.surfaceKind === "trainer" && bossWinShaky && !bossImminent) base = 6;
-    else base = 1;
+    // Trainer fights are the only +2 XP source pre-Map 4 and are by far the
+    // best lever to close the boss level gap. Wild battles give +1 XP and
+    // are still better than catch when we're full.
+    //
+    // Tiny-team override: cap battle/trainer scoring so a parallel catch
+    // node always wins. Even Grind Mode is meaningless with a 1-mon team —
+    // one bad RNG roll ends the run.
+    if (cand.surfaceKind === "trainer") {
+      if (tinyTeam) base = 4;
+      else if (buildingTeam) base = 10;
+      else if (desperateGrind) base = 35;
+      else if (grindMode) base = 22;
+      else if (bossWinShaky && !bossImminent) base = 8;
+      else base = 2;
+    } else if (cand.surfaceKind === "battle") {
+      if (tinyTeam) base = 3;
+      else if (buildingTeam) base = 6;
+      else if (desperateGrind) base = 14;
+      else if (grindMode) base = 9;
+      else base = 2;
+    } else {
+      // gym / elite — keep at 1 so they don't drown out PC/trainer scoring
+      // in scoreCandidate; the actual decision to engage is forced by the
+      // map graph (you must clear the boss to advance).
+      base = 1;
+    }
   } else if (cand.surfaceKind === "trade") base = 1;
 
   const intel = inferNodeIntel(cand.href, context);

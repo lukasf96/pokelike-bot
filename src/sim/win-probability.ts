@@ -294,14 +294,33 @@ export function adjustMapScoreWithWinProbability(
   ) {
     return -1e9;
   }
+  // Hard refusal for any battle-class node we'd lose almost certainly —
+  // even if Grind Mode boosts the base score sky-high, walking into a 90%
+  // loss is run-over.
   if (
-    intel.category === "wild" ||
-    intel.category === "legendary" ||
-    intel.category === "trainer" ||
-    intel.category === "dynamic_trainer" ||
-    intel.category === "gym" ||
-    intel.category === "elite"
+    (intel.category === "trainer" ||
+      intel.category === "dynamic_trainer" ||
+      intel.category === "wild") &&
+    pWin < 0.2
   ) {
+    return -1e9;
+  }
+  // Boss nodes (gym/elite) never get pWin-dampened — you have to walk into
+  // them eventually to clear the map. Dampening them here just reorders
+  // ties; the actual decision lives in `scoreCandidate`.
+  if (intel.category === "gym" || intel.category === "elite") {
+    return baseScore * (0.55 + 0.45 * pWin);
+  }
+  if (intel.category === "trainer" || intel.category === "dynamic_trainer") {
+    // Trainers are *the* +2 XP source pre-Map 4. Even at pWin=0.4 (40% win)
+    // their XP is worth detouring for. Use a gentler multiplier so they
+    // remain favoured over a catch when Grind Mode is active. Floor at 0.65.
+    return baseScore * Math.max(0.65, 0.7 + 0.3 * pWin);
+  }
+  if (intel.category === "wild") {
+    return baseScore * Math.max(0.7, 0.75 + 0.25 * pWin);
+  }
+  if (intel.category === "legendary") {
     return baseScore * (0.55 + 0.45 * pWin);
   }
   return baseScore;

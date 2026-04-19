@@ -2,6 +2,7 @@ import {
   type MapCandidateBrief,
   type NodeIntel,
   type ScoreCandidateContext,
+  bossLevelStats,
   inferNodeIntel,
   pickBattlePrepIntel,
   scoreCandidate,
@@ -65,12 +66,30 @@ export const handleMap: Handler = async (initialTick, ctx) => {
   );
   const pcAvailable = candidates.some((c) => c.surfaceKind === "pokecenter");
 
+  // Team-level / boss-level summary feeds Grind Mode in scoreCandidate.
+  // Use ALIVE max level (a fainted L20 mon doesn't help us close the gap).
+  let teamMaxLevel = 0;
+  let aliveTeamSize = 0;
+  for (const p of game.team) {
+    if (p.hp.current <= 0) continue;
+    aliveTeamSize += 1;
+    if (p.level > teamMaxLevel) teamMaxLevel = p.level;
+  }
+  const { leadLevel: bossLeadLevel, maxLevel: bossMaxLevel } = bossLevelStats(
+    game.currentMap,
+    game.eliteIndex,
+  );
+
   const scoreCtx: ScoreCandidateContext = {
     ...context,
     hpRatio: hp.ratio,
     bossImminent,
     pcAvailable,
     pWinBoss,
+    teamMaxLevel,
+    aliveTeamSize,
+    bossLeadLevel,
+    bossMaxLevel,
   };
 
   const scored = candidates.map((c) => {
@@ -121,9 +140,10 @@ export const handleMap: Handler = async (initialTick, ctx) => {
     "map",
     `→ ${chosen.surfaceKind} · score ${bestScore.toFixed(1)} · pWin ${best.pWin.toFixed(2)} · candidates ${summary}`,
   );
+  const levelGap = bossMaxLevel - teamMaxLevel;
   logAction(
     "map",
-    `Team hp ${Math.round(hp.ratio * 100)}% · faint ${hp.fainted} · crit ${hp.critical} · lowHp ${hp.lowHp} · map ${game.currentMap} · elite ${game.eliteIndex} · pWinBoss ${pWinBoss.toFixed(2)}${bossImminent ? " · BOSS_IMMINENT" : ""}${pcAvailable ? " · pc" : ""}`,
+    `Team hp ${Math.round(hp.ratio * 100)}% · faint ${hp.fainted} · crit ${hp.critical} · lowHp ${hp.lowHp} · map ${game.currentMap} · elite ${game.eliteIndex} · pWinBoss ${pWinBoss.toFixed(2)} · teamMaxL ${teamMaxLevel}/${bossMaxLevel} (gap ${levelGap})${bossImminent ? " · BOSS_IMMINENT" : ""}${pcAvailable ? " · pc" : ""}`,
   );
 
   await sleep(1200);
