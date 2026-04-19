@@ -172,8 +172,9 @@ export function matchupAdjustment(team: TeamMemberBrief[], enemyTypings: string[
 }
 
 /**
- * game.js resolveQuestionMark (non-Nuzlocke): outcome weights × same base scores as scoreCandidate
- * shiny branch uses hasShinyCharm upper bound — we assume no charm (conservative).
+ * game.js resolveQuestionMark (non-Nuzlocke): outcome weights × same base scores as scoreCandidate.
+ * Shiny branch uses hasShinyCharm upper bound — we assume no charm (conservative).
+ * The "mega" branch resolves as an extra item roll (no mega Pokémon in v1.3.1), so fold into item weight.
  */
 export function expectedQuestionMarkSurfaceBase(): number {
   const pBattle = 0.22;
@@ -186,9 +187,8 @@ export function expectedQuestionMarkSurfaceBase(): number {
     pBattle * 1 +
     pTrainer * 1 +
     pCatch * 4 +
-    pItem * 3 +
-    pShiny * 6 +
-    pMega * 3
+    (pItem + pMega) * 3 +
+    pShiny * 3
   );
 }
 
@@ -305,6 +305,43 @@ export function computeTeamOrder(team: TeamMemberBrief[], leadTypingsPool: strin
   return indices;
 }
 
+/** Matches resolveQuestionMark battle weights: wild vs dynamic trainer — expected lead matchup before rolling the outcome. */
+export function computeTeamOrderForQuestionMark(team: TeamMemberBrief[], context: IntelContext): number[] {
+  const n = team.length;
+  const indices = Array.from({ length: n }, (_, i) => i);
+
+  const wildIntel: NodeIntel = { category: "wild", mapIndex: context.currentMap };
+  const dynIntel: NodeIntel = { category: "dynamic_trainer", mapIndex: context.currentMap };
+  const wildPool = leadTypingsPoolForIntel(wildIntel, context);
+  const trainerPool = leadTypingsPoolForIntel(dynIntel, context);
+
+  const pBattle = 0.22;
+  const pTrainer = 0.2;
+  const wSum = pBattle + pTrainer;
+
+  function avgScoreOverPool(idx: number, pool: string[][]): number {
+    if (pool.length === 0) return 0;
+    let sum = 0;
+    for (const lt of pool) {
+      sum += leadScoreForTypes(team[idx], lt);
+    }
+    return sum / pool.length;
+  }
+
+  function expectedLeadScore(idx: number): number {
+    const ew = wildPool.length > 0 ? (pBattle / wSum) * avgScoreOverPool(idx, wildPool) : 0;
+    const et = trainerPool.length > 0 ? (pTrainer / wSum) * avgScoreOverPool(idx, trainerPool) : 0;
+    return ew + et;
+  }
+
+  if (wildPool.length === 0 && trainerPool.length === 0) {
+    return indices;
+  }
+
+  indices.sort((a, b) => expectedLeadScore(b) - expectedLeadScore(a));
+  return indices;
+}
+
 export interface MapCandidateBrief {
   href: string;
   surfaceKind: string;
@@ -362,7 +399,12 @@ export function pickBattlePrepIntel(
   };
 }
 
-export function shouldReorderForBattle(intel: NodeIntel, enemyTypings: string[][]): boolean {
+export function shouldReorderForBattle(
+  surfaceKind: string,
+  intel: NodeIntel,
+  enemyTypings: string[][],
+): boolean {
+  if (surfaceKind === "question") return true;
   if (intel.category === "gym" || intel.category === "elite") return true;
   if (intel.category === "legendary") return enemyTypings.length > 0;
   if (intel.category === "wild" || intel.category === "dynamic_trainer") return enemyTypings.length > 0;

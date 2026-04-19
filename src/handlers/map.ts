@@ -8,6 +8,7 @@ import {
   scoreCandidate,
   shouldReorderForBattle,
   computeTeamOrder,
+  computeTeamOrderForQuestionMark,
 } from "../battle-intel.js";
 import { adjustMapScoreWithWinProbability, estimateBattleWinProbability } from "../sim/win-probability.js";
 import { sleep } from "../page-utils.js";
@@ -19,6 +20,10 @@ import { dismissTutorial } from "./startup.js";
 type MapPageOk = {
   empty: false;
   lowHp: boolean;
+  /** Team members at 0 HP */
+  nFainted: number;
+  /** Team members above 0 HP but below 25% max HP */
+  nCritical: number;
   hpRatio: number;
   currentMap: number;
   eliteIndex: number;
@@ -37,6 +42,8 @@ export async function handleMap(page: Page): Promise<void> {
 
   const snapshot = (await page.evaluate(() => {
     let hpRatio = 1;
+    let nFainted = 0;
+    let nCritical = 0;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const st = (window as any).state;
@@ -44,10 +51,16 @@ export async function handleMap(page: Page): Promise<void> {
       const tot = team.reduce((s, p) => s + p.currentHp, 0);
       const mx = team.reduce((s, p) => s + p.maxHp, 0);
       if (mx > 0) hpRatio = tot / mx;
+      for (const p of team) {
+        const maxHp = p.maxHp ?? 1;
+        const cur = p.currentHp ?? 0;
+        if (cur <= 0) nFainted += 1;
+        else if (maxHp > 0 && cur / maxHp < 0.25) nCritical += 1;
+      }
     } catch {
       /* state not accessible */
     }
-    const lowHp = hpRatio < 0.6;
+    const lowHp = nFainted >= 1 || nCritical >= 2 || hpRatio < 0.55;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const st = (window as any).state;
@@ -95,6 +108,8 @@ export async function handleMap(page: Page): Promise<void> {
     return {
       empty: false as const,
       lowHp,
+      nFainted,
+      nCritical,
       hpRatio,
       currentMap,
       eliteIndex,
@@ -138,8 +153,11 @@ export async function handleMap(page: Page): Promise<void> {
     context,
   );
 
-  if (shouldReorderForBattle(prep.intel, prep.enemyTypings)) {
-    const order = computeTeamOrder(snapshot.team, prep.leadTypingsPool);
+  if (shouldReorderForBattle(chosen.surfaceKind, prep.intel, prep.enemyTypings)) {
+    const order =
+      chosen.surfaceKind === "question"
+        ? computeTeamOrderForQuestionMark(snapshot.team, context)
+        : computeTeamOrder(snapshot.team, prep.leadTypingsPool);
     await page.evaluate((permutation: number[]) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const st = (window as any).state;
@@ -156,19 +174,21 @@ export async function handleMap(page: Page): Promise<void> {
       if (typeof save === "function") save();
     }, order);
     const detail =
-      prep.intel.category === "trainer"
-        ? ` (${prep.intel.key})`
-        : prep.intel.category === "gym"
-          ? ` (map ${prep.intel.mapIndex})`
-          : prep.intel.category === "elite"
-            ? ` (elite ${prep.intel.eliteIndex})`
-            : prep.intel.category === "wild"
-              ? ` (map ${prep.intel.mapIndex})`
-              : prep.intel.category === "legendary"
-                ? " (legendary)"
-                : prep.intel.category === "dynamic_trainer"
-                  ? ` (dyn map ${prep.intel.mapIndex})`
-                  : "";
+      chosen.surfaceKind === "question"
+        ? " (?)"
+        : prep.intel.category === "trainer"
+          ? ` (${prep.intel.key})`
+          : prep.intel.category === "gym"
+            ? ` (map ${prep.intel.mapIndex})`
+            : prep.intel.category === "elite"
+              ? ` (elite ${prep.intel.eliteIndex})`
+              : prep.intel.category === "wild"
+                ? ` (map ${prep.intel.mapIndex})`
+                : prep.intel.category === "legendary"
+                  ? " (legendary)"
+                  : prep.intel.category === "dynamic_trainer"
+                    ? ` (dyn map ${prep.intel.mapIndex})`
+                    : "";
     console.log(`  [map] team order → [${order.join(",")}] for ${prep.intel.category}${detail}`);
   }
 
@@ -183,7 +203,7 @@ export async function handleMap(page: Page): Promise<void> {
   const summary = scored.map((r) => `${r.c.surfaceKind}(${r.adjusted.toFixed(1)})`).join(", ");
 
   console.log(
-    `  [map] hp=${Math.round(snapshot.hpRatio * 100)}% lowHp=${snapshot.lowHp} map=${snapshot.currentMap} eliteIdx=${snapshot.eliteIndex} | ${summary} → picked ${chosen.surfaceKind} score=${bestScore.toFixed(1)} pWin≈${best.pWin.toFixed(2)}`,
+    `  [map] hp=${Math.round(snapshot.hpRatio * 100)}% faint=${snapshot.nFainted} crit=${snapshot.nCritical} lowHp=${snapshot.lowHp} map=${snapshot.currentMap} eliteIdx=${snapshot.eliteIndex} | ${summary} → picked ${chosen.surfaceKind} score=${bestScore.toFixed(1)} pWin≈${best.pWin.toFixed(2)}`,
   );
 
   await sleep(1200);
