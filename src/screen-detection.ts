@@ -42,6 +42,16 @@ export async function isItemEquipOpen(page: Page): Promise<boolean> {
   });
 }
 
+/** Eevee Lv 36 / moon-stone branching evo — blocks until a card in `#eevee-choices` is clicked */
+export async function isEeveeChoiceOpen(page: Page): Promise<boolean> {
+  return page.evaluate((): boolean => {
+    const overlay = document.getElementById("eevee-choice-overlay");
+    if (!overlay) return false;
+    const display = (overlay as HTMLElement).style.display;
+    return display !== "none" && display !== "";
+  });
+}
+
 export async function screenText(page: Page): Promise<string> {
   return page.evaluate((): string => {
     const active = document.querySelector<HTMLElement>(".screen.active");

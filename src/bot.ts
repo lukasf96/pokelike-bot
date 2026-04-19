@@ -13,6 +13,7 @@ import { enableAutoSkip } from "./handlers/startup.js";
 import { handleShinyExtended } from "./handlers/shiny.js";
 import { handleStarter } from "./handlers/starter.js";
 import { handleSwap } from "./handlers/swap.js";
+import { handleEeveeChoice } from "./handlers/eevee.js";
 import { handleTitle } from "./handlers/title.js";
 import { handleTrade } from "./handlers/trade.js";
 import { handleTrainer } from "./handlers/trainer.js";
@@ -20,7 +21,13 @@ import { handleTransition } from "./handlers/transition.js";
 import { handleWin } from "./handlers/win.js";
 import { clickFirst, humanDelay, sleep } from "./page-utils.js";
 import { clearSnapshot, snapshotGameState, updateRunSession } from "./run-log.js";
-import { activeScreen, isItemEquipOpen, isMoveTutorOpen, screenText } from "./screen-detection.js";
+import {
+  activeScreen,
+  isEeveeChoiceOpen,
+  isItemEquipOpen,
+  isMoveTutorOpen,
+  screenText,
+} from "./screen-detection.js";
 
 async function runBot(): Promise<void> {
   console.log("Launching Pokelike bot...\n");
@@ -79,10 +86,12 @@ async function runBot(): Promise<void> {
       snapshotGameState(page).catch(() => {});
     }
 
+    let eeveeChoiceOpen = false;
     let tutorOpen = false;
     let itemEquipOpen = false;
     try {
-      if (screen === "map-screen" || screen === "item-screen") {
+      eeveeChoiceOpen = await isEeveeChoiceOpen(page);
+      if (!eeveeChoiceOpen && (screen === "map-screen" || screen === "item-screen")) {
         tutorOpen = await isMoveTutorOpen(page);
         if (!tutorOpen) itemEquipOpen = await isItemEquipOpen(page);
       }
@@ -90,7 +99,7 @@ async function runBot(): Promise<void> {
       /* ignore */
     }
 
-    const effectiveScreen = tutorOpen ? "move-tutor" : itemEquipOpen ? "item-equip" : screen;
+    const effectiveScreen = eeveeChoiceOpen ? "eevee-choice" : tutorOpen ? "move-tutor" : itemEquipOpen ? "item-equip" : screen;
 
     if (effectiveScreen !== lastScreen) {
       let text = "";
@@ -107,7 +116,10 @@ async function runBot(): Promise<void> {
     prevScreen = screen;
 
     try {
-      if (tutorOpen) {
+      if (eeveeChoiceOpen) {
+        await handleEeveeChoice(page);
+        stuckCount = 0;
+      } else if (tutorOpen) {
         await handleMoveTutor(page);
         stuckCount = 0;
       } else if (itemEquipOpen) {
