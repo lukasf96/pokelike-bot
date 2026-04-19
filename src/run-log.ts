@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { logAction, logError } from "./logger.js";
+import { endRunDetail, startRunDetail } from "./run-detail-log.js";
 import type { RunEvent } from "./state/run-machine.js";
 import type { GameSnapshot, Pokemon, Tick } from "./state/types.js";
 
@@ -131,6 +132,13 @@ function parseDefeatContext(
 }
 
 export function handleRunLogEvent(event: RunEvent, tick: Tick, currentTurn: number): void {
+  // Per-run detail file is opened when a new run begins so handlers can stream
+  // structured rows (decisions, catches, notes) into it as soon as the next
+  // tick arrives.
+  if (event.type === "run-started") {
+    startRunDetail(event.runNumber);
+    return;
+  }
   if (event.type !== "run-ended") return;
 
   const lastGame = event.lastGame;
@@ -141,6 +149,8 @@ export function handleRunLogEvent(event: RunEvent, tick: Tick, currentTurn: numb
       ? parseDefeatContext(battleUi?.title ?? "", battleUi?.subtitle ?? "", lastGame)
       : null;
 
+  const team = lastGame ? toLogTeam(lastGame.team) : [];
+
   appendRunLog({
     timestamp: new Date().toISOString(),
     outcome: event.outcome,
@@ -150,6 +160,14 @@ export function handleRunLogEvent(event: RunEvent, tick: Tick, currentTurn: numb
     defeatContext,
     eliteIndex: lastGame?.eliteIndex ?? null,
     teamHpRatio: lastGame ? teamHpRatio(lastGame.team) : null,
-    team: lastGame ? toLogTeam(lastGame.team) : [],
+    team,
   });
+
+  const detailPath = endRunDetail({
+    outcome: event.outcome,
+    badges: lastGame?.badges ?? null,
+    defeatContext,
+    finalTeam: team,
+  });
+  if (detailPath) logAction("run-log", `Detail → ${detailPath}`);
 }

@@ -279,32 +279,67 @@ export function estimateBattleWinProbability(
   return wins / samples;
 }
 
+export interface WinProbabilityAdjustOpts {
+  /** Live alive-team size; used to apply stricter refusal floors when small. */
+  aliveTeamSize?: number;
+}
+
 /** Scale raw map score — hard refusals + pWin multiplier (A5). */
 export function adjustMapScoreWithWinProbability(
   baseScore: number,
   intel: NodeIntel,
   lowHp: boolean,
   pWin: number,
+  opts: WinProbabilityAdjustOpts = {},
 ): number {
-  if (intel.category === "legendary" && pWin < 0.55) return -1e9;
+  const aliveTeamSize = opts.aliveTeamSize ?? 6;
+  // Graduated refusal: when refused, return a deeply negative score that
+  // *still preserves pWin ordering*. This way if every map candidate is a
+  // refused trainer (no catch / item / PC alternative on the layer), we
+  // pick the highest-pWin trainer rather than a uniform -1e9 (which makes
+  // the bot pick whichever candidate happens to come first). Unrefused
+  // candidates with positive scores always still win — `-1e6` ≪ any real
+  // base score.
+  const refused = (p: number): number => -1e6 + p * 1e3;
+
+  if (intel.category === "legendary" && pWin < 0.55) return refused(pWin);
+  // lowHp + uncertain trainer → run-over risk. Diagnostic: Run 4 (last
+  // batch) walked solo Bulb L7 hp=0.565 into Officer at pWin=0.554 (just
+  // squeaked past old 0.55 floor) and lost. Bumped to 0.65 so a battered
+  // team only takes confidently-winnable trainers. Solo (alive=1) is
+  // strictest: any uncertainty = death.
+  const lowHpTrainerFloor = aliveTeamSize <= 1 ? 0.8 : 0.65;
   if (
     (intel.category === "trainer" || intel.category === "dynamic_trainer") &&
     lowHp &&
-    pWin < 0.4
+    pWin < lowHpTrainerFloor
   ) {
-    return -1e9;
+    return refused(pWin);
   }
-  // Hard refusal for any battle-class node we'd lose almost certainly —
-  // even if Grind Mode boosts the base score sky-high, walking into a 90%
-  // loss is run-over.
-  if (
-    (intel.category === "trainer" ||
-      intel.category === "dynamic_trainer" ||
-      intel.category === "wild") &&
-    pWin < 0.2
-  ) {
-    return -1e9;
+  if (intel.category === "wild" && lowHp && pWin < 0.5) return refused(pWin);
+  // Static trainers: hard refusal at sub-30% — losing one trainer = run
+  // over, the +2 XP isn't worth gambling on a coin flip. Solo: 0.55 (no
+  // backup mon, much smaller margin for variance/crit).
+  const staticTrainerFloor = aliveTeamSize <= 1 ? 0.55 : 0.3;
+  if (intel.category === "trainer" && pWin < staticTrainerFloor) {
+    return refused(pWin);
   }
+  // Dynamic trainers (Ace Trainer etc.) sample from the map's catch pool
+  // which on Map 2 reaches L25 with strong BST mons. Variance is huge, so
+  // demand a safer floor than for fixed-roster trainers. Diagnostic: Run 7
+  // lost a 4-mon team to an Ace at pWin=0.429 (passed old 0.4 floor); Run 13
+  // burned 3 mons winning at pWin=0.643 because dynamic rosters often pack a
+  // single L25 BST monster that one-shots even when "expected" to win.
+  //
+  // Floor depends on team size: the smaller our team, the more catastrophic
+  // a single bad sample is. With ≤2 mons one Ace L25 ≈ run-over even at
+  // simulated pWin=1.0 (variance the sim doesn't see). Diagnostic: Run 11
+  // (Bulb L10 + Slowpoke L6) accepted Ace at pWin=1.0 → instantly lost.
+  const dynamicTrainerFloor = aliveTeamSize <= 2 ? 0.85 : aliveTeamSize <= 3 ? 0.65 : 0.5;
+  if (intel.category === "dynamic_trainer" && pWin < dynamicTrainerFloor) {
+    return refused(pWin);
+  }
+  if (intel.category === "wild" && pWin < 0.25) return refused(pWin);
   // Boss nodes (gym/elite) never get pWin-dampened — you have to walk into
   // them eventually to clear the map. Dampening them here just reorders
   // ties; the actual decision lives in `scoreCandidate`.

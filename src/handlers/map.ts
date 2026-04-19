@@ -2,6 +2,7 @@ import {
   type MapCandidateBrief,
   type NodeIntel,
   type ScoreCandidateContext,
+  attackingStabTypes,
   bossLevelStats,
   inferNodeIntel,
   pickBattlePrepIntel,
@@ -9,8 +10,11 @@ import {
   shouldReorderForBattle,
   computeTeamOrder,
   computeTeamOrderForQuestionMark,
+  typeEffectiveness,
 } from "../battle-intel.js";
+import { BOSS_TYPES_BY_MAP } from "../catch-intel.js";
 import { logAction } from "../logger.js";
+import { recordDecision } from "../run-detail-log.js";
 import { adjustMapScoreWithWinProbability, estimateBattleWinProbability } from "../sim/win-probability.js";
 import type { Handler, HandlerCtx } from "../state/handler.js";
 import { selectBagItemIds, selectItemTeam, selectTeamBrief, selectTeamHp } from "../state/selectors.js";
@@ -80,6 +84,27 @@ export const handleMap: Handler = async (initialTick, ctx) => {
     game.eliteIndex,
   );
 
+  // Does any team member's STAB hit the *current* map's boss SE? Used by
+  // scoreCandidate's must-grind-counter mode: when we already have a counter
+  // but it's far below the boss's level, more catches don't help — we need
+  // XP. Bulbasaur (Grass/Poison) → SE vs Brock (Rock/Ground), so a Bulb-led
+  // team in Map 1 satisfies this. Catch-only path then loses to Brock at L5.
+  const currentBossTypes = BOSS_TYPES_BY_MAP[game.currentMap] ?? [];
+  let teamHasBossCounter = false;
+  for (const p of game.team) {
+    if (p.hp.current <= 0) continue;
+    for (const stab of attackingStabTypes(p.types)) {
+      for (const bt of currentBossTypes) {
+        if (typeEffectiveness(stab, [bt]) >= 2) {
+          teamHasBossCounter = true;
+          break;
+        }
+      }
+      if (teamHasBossCounter) break;
+    }
+    if (teamHasBossCounter) break;
+  }
+
   const scoreCtx: ScoreCandidateContext = {
     ...context,
     hpRatio: hp.ratio,
@@ -88,8 +113,10 @@ export const handleMap: Handler = async (initialTick, ctx) => {
     pWinBoss,
     teamMaxLevel,
     aliveTeamSize,
+    faintedCount: hp.fainted,
     bossLeadLevel,
     bossMaxLevel,
+    teamHasBossCounter,
   };
 
   const scored = candidates.map((c) => {
@@ -97,8 +124,10 @@ export const handleMap: Handler = async (initialTick, ctx) => {
     const intel = inferNodeIntel(cand.href, context);
     const baseScore = scoreCandidate(hp.lowHp, cand, teamBrief, scoreCtx);
     const pWin = estimateBattleWinProbability(intel, teamRaw, bagItemIds, context);
-    const adjusted = adjustMapScoreWithWinProbability(baseScore, intel, hp.lowHp, pWin);
-    return { c, pWin, adjusted };
+    const adjusted = adjustMapScoreWithWinProbability(baseScore, intel, hp.lowHp, pWin, {
+      aliveTeamSize,
+    });
+    return { c, pWin, base: baseScore, adjusted };
   });
 
   let bestIdx = 0;
@@ -140,6 +169,31 @@ export const handleMap: Handler = async (initialTick, ctx) => {
     "map",
     `→ ${chosen.surfaceKind} · score ${bestScore.toFixed(1)} · pWin ${best.pWin.toFixed(2)} · candidates ${summary}`,
   );
+
+  // Structured decision row for the per-run detail file. Lets us replay
+  // "what were our options and why did we pick this one?" offline.
+  const alternatives = scored.map((r) => ({
+    kind: r.c.surfaceKind,
+    pWin: Number(r.pWin.toFixed(3)),
+    base: Number(r.base.toFixed(2)),
+    adjusted: Number(r.adjusted.toFixed(2)),
+  }));
+  recordDecision({
+    map: game.currentMap,
+    chosenIdx: bestIdx,
+    chosen: alternatives[bestIdx]!,
+    alternatives,
+    ctx: {
+      hpRatio: Number(hp.ratio.toFixed(3)),
+      fainted: hp.fainted,
+      alive: aliveTeamSize,
+      teamMaxLevel,
+      bossMaxLevel,
+      pWinBoss: Number(pWinBoss.toFixed(3)),
+      bossImminent,
+      pcAvailable,
+    },
+  });
   const levelGap = bossMaxLevel - teamMaxLevel;
   logAction(
     "map",

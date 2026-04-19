@@ -33,6 +33,7 @@ import { handleTransition } from "./handlers/transition.js";
 import { handleWin } from "./handlers/win.js";
 import { clickFirst, humanDelay, sleep } from "./page-utils.js";
 import { handleRunLogEvent } from "./run-log.js";
+import { setCurrentTurn } from "./run-detail-log.js";
 import type { Handler, HandlerCtx } from "./state/handler.js";
 import { RunMachine, type RunEvent } from "./state/run-machine.js";
 import { observe } from "./state/snapshot.js";
@@ -129,6 +130,7 @@ async function runBot(): Promise<void> {
     tickId += 1;
     const tick = await safeObserve(page, tickId);
     const events = machine.step(tick);
+    setCurrentTurn(machine.turnNumber);
 
     for (const e of events) {
       if (e.type === "run-ended") {

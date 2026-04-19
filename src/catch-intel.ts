@@ -182,8 +182,13 @@ export function scoreCatchCandidate(
       const urgency = [200, 110, 50, 25][distance] ?? 0;
       score += urgency;
     } else if (hitsBoss) {
-      // Team has someone, but more is welcome. Smaller bonus, decays harder.
-      const bonus = [40, 22, 12, 6][distance] ?? 0;
+      // Team has someone, but more is welcome — and one counter is often not
+      // enough (Misty 2HKOs a single Bulb L14). Diagnostic: Misty Run 1 lost
+      // with Bulb L14 + Meowth/Tentacool/Cubone — the off-typing mons each
+      // beat a 2nd Pikachu/Bellsprout in catch scoring because the bonus
+      // here was only +40. Bumped to +120 for current-map boss so a 2nd SE
+      // counter wins over generic high-BST carries.
+      const bonus = [120, 50, 20, 8][distance] ?? 0;
       score += bonus;
     }
 
@@ -208,10 +213,24 @@ export function scoreCatchCandidate(
   // ── (b) Duplicate STAB penalty ───────────────────────────────────────────
   // The 4th Water mon is far less valuable than the 1st. −30 per duplicate
   // STAB type the team already has 2+ copies of.
+  //
+  // Diagnostic from regression batch: Run 6 / Run 8 lost with 2-mon teams
+  // of Bulbasaur+Bellsprout (both Grass/Poison — exact same STAB). The
+  // mild −8 was nothing against Bellsprout's BST·√L of ~1050. When team
+  // has ≤2 mons, a fully-redundant STAB catch is *bad* even if its raw BST
+  // is high — apply a multiplicative cap so a non-redundant alternative
+  // (any new type) wins.
+  let allStabsAlreadyOnTeam = candidateStab.length > 0;
   for (const stab of candidateStab) {
     const dupes = stabFreq.get(stab) ?? 0;
     if (dupes >= 2) score -= 30 * (dupes - 1);
     else if (dupes === 1 && covered.has(stab)) score -= 8; // mild duplicate
+    if ((stabFreq.get(stab) ?? 0) === 0) allStabsAlreadyOnTeam = false;
+  }
+  // Tiny teams (≤ 2 mons) need *type variance*, not more of the same.
+  // teamTypes.length is the alive team size as passed by the caller.
+  if (allStabsAlreadyOnTeam && teamTypes.length <= 2 && teamTypes.length > 0) {
+    score *= 0.35;
   }
 
   // ── (c) Late-game carry bonus (Ice/Electric/Rock/Ghost STAB for Maps 6+) ─
@@ -227,6 +246,34 @@ export function scoreCatchCandidate(
   // ── (d) Shiny bonus ──────────────────────────────────────────────────────
   if (isShiny && finalBst >= 400) score += 30;
   else if (isShiny) score += 10;
+
+  // ── (e) Boss-imminent deadweight multiplier ─────────────────────────────
+  // The additive ±200 in (a) is dwarfed by `BST × √level` for late-game
+  // carries (Tauros L14 final BST 490 × 3.7 ≈ 1810). Diagnostic: Misty Run
+  // 12 lost with Bulb + Pidgeotto + 2 Tauros — Tauros's massive BST score
+  // beat every Pikachu/Bellsprout offered. Scale catches that don't help
+  // the *current* map's boss multiplicatively so a counter-mon wins even
+  // if its raw BST is half. Only applies when there's no team counter yet
+  // (otherwise Tauros is fine — Bulbasaur already covers Misty).
+  const currentBoss = BOSS_TYPES_BY_MAP[mapIndex];
+  if (currentBoss && currentBoss.length > 0) {
+    let candidateHitsBossSE = false;
+    for (const stab of candidateStab) {
+      for (const bt of currentBoss) {
+        if (typeEffectiveness(stab, [bt]) >= 2) {
+          candidateHitsBossSE = true;
+          break;
+        }
+      }
+      if (candidateHitsBossSE) break;
+    }
+    const teamCounter = teamHasCounterFor(teamTypes, currentBoss);
+    if (!candidateHitsBossSE) {
+      // No SE vs current boss = doesn't help the fight that ends the run.
+      // 0.45x when team has no counter (urgent), 0.75x when covered.
+      score *= teamCounter ? 0.75 : 0.45;
+    }
+  }
 
   return score;
 }

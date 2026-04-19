@@ -170,10 +170,26 @@ function abbrev(s: string, max: number): string {
   return `${s.slice(0, max - 1)}…`;
 }
 
+/**
+ * Optional sink for structured logging. `subscribeToActions` lets the
+ * per-run detail recorder mirror every `logAction` line into the active run
+ * file without coupling logger.ts to any recorder.
+ */
+let actionSubscriber: ((scope: string, message: string) => void) | null = null;
+
+export function subscribeToActions(fn: (scope: string, message: string) => void): void {
+  actionSubscriber = fn;
+}
+
 export function logAction(scope: string, message: string): void {
   const code = SCOPE_STYLE[scope] ?? "90";
   const tag = paint(code, `[${scope}]`);
   console.log(`  ${tag} ${message}`);
+  try {
+    actionSubscriber?.(scope, message);
+  } catch {
+    /* never let the subscriber crash the bot */
+  }
 }
 
 export function logWarn(message: string): void {

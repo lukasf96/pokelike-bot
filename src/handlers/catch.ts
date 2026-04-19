@@ -2,6 +2,7 @@ import type { Handler } from "../state/handler.js";
 import { logAction } from "../logger.js";
 import { sleep } from "../page-utils.js";
 import { scoreCatchCandidate } from "../catch-intel.js";
+import { recordCatch } from "../run-detail-log.js";
 
 export const handleCatch: Handler = async (tick, { page }) => {
   const options = tick.ui.catch?.options ?? [];
@@ -30,6 +31,32 @@ export const handleCatch: Handler = async (tick, { page }) => {
     "catch",
     `Scored: ${scored.map((s) => `${s.opt.name}(${s.score.toFixed(0)})`).join(", ")} → picking ${best.opt.name}`,
   );
+
+  // Structured catch row for per-run detail. Records original UI order so
+  // diagnostics can correlate with what the player would have seen.
+  recordCatch({
+    map: mapIndex,
+    options: options.map((opt) => {
+      const sc = scored.find((s) => s.opt.index === opt.index);
+      return {
+        name: opt.name,
+        speciesId: opt.speciesId,
+        level: opt.level,
+        isShiny: opt.isShiny,
+        score: Number((sc?.score ?? 0).toFixed(2)),
+      };
+    }),
+    pickedIndex: best.opt.index,
+    pickedName: best.opt.name,
+    teamBefore: tick.game
+      ? tick.game.team.map((p) => ({
+          name: p.name,
+          level: p.level,
+          types: p.types,
+          alive: p.hp.current > 0,
+        }))
+      : [],
+  });
 
   await page.evaluate((idx: number) => {
     const cards = Array.from(document.querySelectorAll<HTMLElement>("#catch-choices .poke-card"));
