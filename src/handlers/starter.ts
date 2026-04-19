@@ -23,7 +23,7 @@ export async function handleStarter(page: Page): Promise<void> {
     );
     const preferred = cards.find((c) => {
       const t = c.textContent?.toLowerCase() ?? "";
-      return t.includes("bulbasaur");
+      return t.includes("squirtle");
     });
     const target = preferred ?? cards[0];
     const name =
