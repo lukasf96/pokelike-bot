@@ -9,17 +9,24 @@ export interface RunLogTeamMember {
   level: number;
   types: string[];
   hp: { current: number; max: number };
-  baseStats: { hp: number; atk: number; def: number; spa: number; spd: number; spe: number } | null;
   heldItemId: string | null;
   isShiny: boolean;
 }
+
+export type DefeatContext =
+  | { kind: "wild"; pokemon: string; level: number }
+  | { kind: "trainer"; name: string }
+  | { kind: "gym"; leader: string; badge: string; mapIndex: number }
+  | { kind: "elite"; title: string; name: string; eliteIndex: number }
+  | { kind: "unknown"; battleTitle: string; battleSubtitle: string };
 
 export interface RunLogEntry {
   timestamp: string;
   outcome: "won" | "lost";
   runNumber: number;
   botTurn: number;
-  currentMap: number | null;
+  badges: number | null;
+  defeatContext: DefeatContext | null;
   eliteIndex: number | null;
   teamHpRatio: number | null;
   team: RunLogTeamMember[];
@@ -27,7 +34,7 @@ export interface RunLogEntry {
 
 interface GameSnapshot {
   team: RunLogTeamMember[];
-  currentMap: number | null;
+  badges: number | null;
   eliteIndex: number | null;
   teamHpRatio: number | null;
 }
@@ -54,19 +61,20 @@ export function updateRunSession(run: number, turn: number): void {
 // ── Browser-side snapshot ────────────────────────────────────────────────────
 
 /**
- * Read live game state from `window.state`. Call each bot turn while the game
- * is running so the last good snapshot is available when the run ends.
+ * Read game state from localStorage["poke_current_run"] (written by saveRun() in game.js).
+ * Called each bot turn so the Node-side cache stays fresh. The cache survives defeat because
+ * clearSavedRun() fires before our handler runs, but our cached copy is already in Node memory.
  */
 export async function snapshotGameState(page: Page): Promise<void> {
   const snap = await page.evaluate((): GameSnapshot | null => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const state = (window as any).state as Record<string, unknown> | undefined;
-      const rawTeam = state?.team;
+      const raw = localStorage.getItem("poke_current_run");
+      if (!raw) return null;
+      const state = JSON.parse(raw) as Record<string, unknown>;
+      const rawTeam = state.team;
       if (!Array.isArray(rawTeam) || rawTeam.length === 0) return null;
 
       const team = (rawTeam as Array<Record<string, unknown>>).map((p) => {
-        const bs = p.baseStats as Record<string, number> | undefined | null;
         const held = p.heldItem as { id?: string } | null | undefined;
         return {
           speciesId: Number(p.speciesId ?? 0),
@@ -74,10 +82,6 @@ export async function snapshotGameState(page: Page): Promise<void> {
           level: Number(p.level ?? 0),
           types: Array.isArray(p.types) ? (p.types as unknown[]).map(String) : [],
           hp: { current: Number(p.currentHp ?? 0), max: Number(p.maxHp ?? 0) },
-          baseStats:
-            bs && typeof bs.hp === "number" && typeof bs.atk === "number"
-              ? { hp: bs.hp, atk: bs.atk, def: bs.def, spa: bs.spa, spd: bs.spd, spe: bs.spe }
-              : null,
           heldItemId: held?.id != null ? String(held.id) : null,
           isShiny: Boolean(p.isShiny),
         };
@@ -92,8 +96,8 @@ export async function snapshotGameState(page: Page): Promise<void> {
 
       return {
         team,
-        currentMap: typeof state?.currentMap === "number" ? state.currentMap : null,
-        eliteIndex: typeof state?.eliteIndex === "number" ? state.eliteIndex : null,
+        badges: typeof state.badges === "number" ? state.badges : null,
+        eliteIndex: typeof state.eliteIndex === "number" ? state.eliteIndex : null,
         teamHpRatio: mx > 0 ? tot / mx : null,
       };
     } catch {
@@ -106,6 +110,64 @@ export async function snapshotGameState(page: Page): Promise<void> {
 
 export function clearSnapshot(): void {
   lastSnapshot = null;
+}
+
+// ── Defeat context ────────────────────────────────────────────────────────────
+
+/**
+ * Read the battle screen DOM to figure out who just defeated us.
+ * Must be called before the game clears the battle screen.
+ */
+async function readDefeatContext(page: Page): Promise<DefeatContext | null> {
+  const cachedElite = lastSnapshot?.eliteIndex ?? -1;
+
+  return page.evaluate(
+    (eliteIndex: number): DefeatContext | null => {
+    const title = (document.getElementById("battle-title")?.textContent ?? "").trim();
+    const subtitle = (document.getElementById("battle-subtitle")?.textContent ?? "").trim();
+    if (!title) return null;
+
+    let mapIndex = -1;
+    try {
+      const raw = localStorage.getItem("poke_current_run");
+      if (raw) mapIndex = Number((JSON.parse(raw) as Record<string, unknown>).currentMap ?? -1);
+    } catch { /* ignore */ }
+
+    // Wild Pokemon: "Wild Pidgey appeared!"
+    const wild = title.match(/^Wild\s+(.+?)\s+appeared!$/i);
+    if (wild) {
+      const levelMatch = subtitle.match(/Level\s+(\d+)/i);
+      return { kind: "wild", pokemon: wild[1]!, level: levelMatch ? Number(levelMatch[1]) : 0 };
+    }
+
+    // Legendary: "A legendary Zapdos appeared!"
+    const legendary = title.match(/^A legendary\s+(.+?)\s+appeared!$/i);
+    if (legendary) {
+      const levelMatch = subtitle.match(/Lv\s+(\d+)/i);
+      return { kind: "wild", pokemon: legendary[1]!, level: levelMatch ? Number(levelMatch[1]) : 0 };
+    }
+
+    // Gym Battle: "Gym Battle vs Misty!"
+    const gym = title.match(/^Gym Battle vs\s+(.+?)!$/i);
+    if (gym) {
+      const badgeMatch = subtitle.match(/^(.+?)\s+is on the line!$/i);
+      return { kind: "gym", leader: gym[1]!, badge: badgeMatch ? badgeMatch[1]! : "", mapIndex };
+    }
+
+    // Elite Four / Champion: "Elite Four: Lorelei!" or "Champion: Blue!"
+    const elite = title.match(/^(.+?):\s+(.+?)!$/);
+    if (elite) {
+      return { kind: "elite", title: elite[1]!, name: elite[2]!, eliteIndex };
+    }
+
+    // Trainer: "Youngster Joey wants to battle!"
+    const trainer = title.match(/^(.+?)\s+wants to battle!$/i);
+    if (trainer) {
+      return { kind: "trainer", name: trainer[1]! };
+    }
+
+    return { kind: "unknown", battleTitle: title, battleSubtitle: subtitle };
+  }, cachedElite) as Promise<DefeatContext | null>;
 }
 
 // ── File I/O ─────────────────────────────────────────────────────────────────
@@ -125,7 +187,10 @@ function appendRunLog(entry: RunLogEntry): void {
 }
 
 export async function logRunEnd(page: Page, outcome: "won" | "lost"): Promise<void> {
-  // Try one last live read, fall back to cached snapshot from earlier in the run.
+  // Capture defeat context while the battle DOM is still intact.
+  const defeatContext = outcome === "lost" ? await readDefeatContext(page) : null;
+
+  // Try one final live state read, then fall back to cached snapshot.
   await snapshotGameState(page);
   const snap = lastSnapshot;
 
@@ -134,7 +199,8 @@ export async function logRunEnd(page: Page, outcome: "won" | "lost"): Promise<vo
     outcome,
     runNumber: sessionRun,
     botTurn: sessionTurn,
-    currentMap: snap?.currentMap ?? null,
+    badges: snap?.badges ?? null,
+    defeatContext,
     eliteIndex: snap?.eliteIndex ?? null,
     teamHpRatio: snap?.teamHpRatio ?? null,
     team: snap?.team ?? [],

@@ -62,7 +62,9 @@ async function runBot(): Promise<void> {
       continue;
     }
 
-    const wasInRun = !["title-screen", "trainer-screen", "starter-screen", "unknown"].includes(prevScreen);
+    const wasInRun =
+      prevScreen !== "" &&
+      !["title-screen", "trainer-screen", "starter-screen", "unknown"].includes(prevScreen);
     if (screen === "title-screen" && wasInRun && prevScreen !== "title-screen") {
       run++;
       turn = 1;
