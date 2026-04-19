@@ -1,6 +1,7 @@
 import puppeteer, { type Browser } from "puppeteer";
 
 import { GAME_URL } from "./constants.js";
+import { warnIfUnexpectedGameVersion } from "./game-version.js";
 import { handleBadge } from "./handlers/badge.js";
 import { handleBattle } from "./handlers/battle.js";
 import { handleCatch } from "./handlers/catch.js";
@@ -49,6 +50,7 @@ async function runBot(): Promise<void> {
   await page.waitForSelector("#btn-new-run", { visible: true, timeout: 30000 });
 
   await enableAutoSkip(page);
+  await warnIfUnexpectedGameVersion(page);
 
   let turn = 0;
   let stuckCount = 0;
