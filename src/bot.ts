@@ -44,8 +44,9 @@ async function runBot(): Promise<void> {
   );
 
   console.log(`Navigating to ${GAME_URL}...`);
-  await page.goto(GAME_URL, { waitUntil: "networkidle2", timeout: 30000 });
-  await sleep(2000);
+  // Avoid networkidle2: ongoing requests (e.g. Firebase) stretch cold-start by seconds.
+  await page.goto(GAME_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.waitForSelector("#btn-new-run", { visible: true, timeout: 30000 });
 
   await enableAutoSkip(page);
 
