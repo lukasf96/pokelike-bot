@@ -63,7 +63,8 @@ const GYM_FIRST_LEAD_TYPES: string[][] = [
   ["Ground"],
 ];
 
-const GYM_TEAM_TYPES: string[][][] = [
+/** Gym roster typings per map index (0..7); used by map scoring and catch intel. */
+export const GYM_TEAM_TYPES: string[][][] = [
   [
     ["Rock", "Ground"],
     ["Rock", "Ground"],
