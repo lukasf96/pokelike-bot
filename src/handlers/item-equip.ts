@@ -6,38 +6,40 @@ import {
   itemNameToId,
   type TeamMemberForItem,
 } from "../item-intel.js";
+import { readGameState } from "../game-state.js";
 import { sleep } from "../page-utils.js";
 
 export async function handleItemEquip(page: Page): Promise<void> {
-  const ctx = await page.evaluate(() => {
-    const modal = document.getElementById("item-equip-modal");
-    if (!modal) return null;
+  const [gs, modalSnap] = await Promise.all([
+    readGameState(page),
+    page.evaluate((): { itemName: string; idxButtons: number[] } | null => {
+      const modal = document.getElementById("item-equip-modal");
+      if (!modal) return null;
+      const itemName = modal.querySelector<HTMLElement>(".equip-item-name")?.textContent?.trim() ?? "";
+      const idxButtons = Array.from(modal.querySelectorAll<HTMLButtonElement>("button[data-idx]"))
+        .filter((b) => !b.classList.contains("equip-btn-unequip"))
+        .map((b) => parseInt(b.dataset.idx ?? "-1", 10));
+      return { itemName, idxButtons };
+    }),
+  ]);
 
-    const itemName = modal.querySelector<HTMLElement>(".equip-item-name")?.textContent?.trim() ?? "";
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const st = (window as any).state;
-    const team: TeamMemberForItem[] = (st?.team ?? []).map((p: Record<string, unknown>) => ({
-      types: Array.isArray(p.types) ? (p.types as string[]) : [],
-      baseStats: p.baseStats as TeamMemberForItem["baseStats"],
-      level: Number(p.level ?? 1),
-      speciesId: Number(p.speciesId ?? 0),
-      currentHp: typeof p.currentHp === "number" ? p.currentHp : undefined,
-      maxHp: typeof p.maxHp === "number" ? p.maxHp : undefined,
-      heldItem: p.heldItem as TeamMemberForItem["heldItem"],
-    }));
-
-    const idxButtons = Array.from(modal.querySelectorAll<HTMLButtonElement>("button[data-idx]")).filter(
-      (b) => !b.classList.contains("equip-btn-unequip"),
-    );
-
-    return { itemName, team, idxButtons: idxButtons.map((b) => parseInt(b.dataset.idx ?? "-1", 10)) };
-  });
-
-  if (!ctx) {
+  if (!modalSnap) {
     console.log("  [item-equip] no-modal");
     await sleep(600);
     return;
   }
+
+  const team: TeamMemberForItem[] = gs.team.map((p) => ({
+    types: p.types,
+    baseStats: p.baseStats,
+    level: p.level,
+    speciesId: p.speciesId,
+    currentHp: p.currentHp,
+    maxHp: p.maxHp,
+    heldItem: p.heldItem ?? undefined,
+  }));
+
+  const ctx = { itemName: modalSnap.itemName, team, idxButtons: modalSnap.idxButtons };
 
   const itemId = itemNameToId(ctx.itemName);
   const emptyFirst = bestEmptySlotForHeldItem(itemId, ctx.team);

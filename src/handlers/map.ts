@@ -11,28 +11,12 @@ import {
   computeTeamOrderForQuestionMark,
 } from "../battle-intel.js";
 import { adjustMapScoreWithWinProbability, estimateBattleWinProbability } from "../sim/win-probability.js";
+import { readGameState } from "../game-state.js";
 import { sleep } from "../page-utils.js";
 import { maybeEquipBagHeldItems, maybeOptimizeHeldItemSwaps } from "./held-item-swaps.js";
 import { maybeUseUsableItems } from "./usable-item.js";
 import { dismissTutorial } from "./startup.js";
 
-/** Successful `page.evaluate` snapshot of the map layer (non-empty clickable set). */
-type MapPageOk = {
-  empty: false;
-  lowHp: boolean;
-  /** Team members at 0 HP */
-  nFainted: number;
-  /** Team members above 0 HP but below 25% max HP */
-  nCritical: number;
-  hpRatio: number;
-  currentMap: number;
-  eliteIndex: number;
-  team: TeamMemberBrief[];
-  /** Raw team for battle simulation (base stats, HP, items). */
-  teamRaw: unknown[];
-  bagItemIds: string[];
-  candidates: Array<{ href: string; surfaceKind: string; idx: number }>;
-};
 
 export async function handleMap(page: Page): Promise<void> {
   await dismissTutorial(page);
@@ -40,85 +24,66 @@ export async function handleMap(page: Page): Promise<void> {
   await maybeEquipBagHeldItems(page);
   await maybeOptimizeHeldItemSwaps(page);
 
-  const snapshot = (await page.evaluate(() => {
-    let hpRatio = 1;
-    let nFainted = 0;
-    let nCritical = 0;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const st = (window as any).state;
-      const team = (st?.team ?? []) as Array<{ currentHp: number; maxHp: number }>;
-      const tot = team.reduce((s, p) => s + p.currentHp, 0);
-      const mx = team.reduce((s, p) => s + p.maxHp, 0);
-      if (mx > 0) hpRatio = tot / mx;
-      for (const p of team) {
-        const maxHp = p.maxHp ?? 1;
-        const cur = p.currentHp ?? 0;
-        if (cur <= 0) nFainted += 1;
-        else if (maxHp > 0 && cur / maxHp < 0.25) nCritical += 1;
-      }
-    } catch {
-      /* state not accessible */
-    }
-    const lowHp = nFainted >= 1 || nCritical >= 2 || hpRatio < 0.55;
+  const [gs, domResult] = await Promise.all([
+    readGameState(page),
+    page.evaluate((): { empty: true; reason: string } | { empty: false; candidates: Array<{ href: string; surfaceKind: string; idx: number }> } => {
+      const clickable = Array.from(document.querySelectorAll<SVGGElement>("#map-container g")).filter((g) =>
+        (g.getAttribute("style") ?? "").includes("cursor: pointer"),
+      );
+      if (clickable.length === 0) return { empty: true, reason: "no clickable nodes" };
+      const candidates = clickable.map((g, idx) => {
+        const img = g.querySelector<SVGImageElement>("image");
+        const href = img?.getAttribute("href") ?? img?.getAttribute("xlink:href") ?? "";
+        const surfaceKind = href.includes("catchPokemon")
+          ? "catch"
+          : href.includes("grass")
+            ? "battle"
+            : href.includes("itemIcon")
+              ? "item"
+              : href.includes("Poke Center") || href.includes("PokeCenter")
+                ? "pokecenter"
+                : href.includes("moveTutor")
+                  ? "move_tutor"
+                  : href.includes("legendaryEncounter")
+                    ? "legendary"
+                    : href.includes("questionMark")
+                      ? "question"
+                      : href.includes("tradeIcon")
+                        ? "trade"
+                        : "unknown";
+        return { idx, href, surfaceKind };
+      });
+      return { empty: false, candidates };
+    }),
+  ]);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const st = (window as any).state;
-    const currentMap = Number(st?.currentMap ?? 0);
-    const eliteIndex = Number(st?.eliteIndex ?? 0);
-    const teamRaw = st?.team ?? [];
-    const team: TeamMemberBrief[] = (teamRaw as Array<{ types?: string[] }>).map((p) => ({
-      types: p.types ?? [],
-    }));
-    const bagItemIds = ((st?.items ?? []) as Array<{ id?: string }>)
-      .map((it) => String(it?.id ?? ""))
-      .filter(Boolean);
+  let nFainted = 0;
+  let nCritical = 0;
+  let hpRatio = 1;
+  const tot = gs.team.reduce((s, p) => s + p.currentHp, 0);
+  const mx = gs.team.reduce((s, p) => s + p.maxHp, 0);
+  if (mx > 0) hpRatio = tot / mx;
+  for (const p of gs.team) {
+    if (p.currentHp <= 0) nFainted += 1;
+    else if (p.maxHp > 0 && p.currentHp / p.maxHp < 0.25) nCritical += 1;
+  }
+  const lowHp = nFainted >= 1 || nCritical >= 2 || hpRatio < 0.55;
 
-    const clickable = Array.from(document.querySelectorAll<SVGGElement>("#map-container g")).filter((g) =>
-      (g.getAttribute("style") ?? "").includes("cursor: pointer"),
-    );
-
-    if (clickable.length === 0) {
-      return { empty: true as const, reason: "no clickable nodes" };
-    }
-
-    const candidates = clickable.map((g, idx) => {
-      const img = g.querySelector<SVGImageElement>("image");
-      const href = img?.getAttribute("href") ?? img?.getAttribute("xlink:href") ?? "";
-      const surfaceKind = href.includes("catchPokemon")
-        ? "catch"
-        : href.includes("grass")
-          ? "battle"
-          : href.includes("itemIcon")
-            ? "item"
-            : href.includes("Poke Center") || href.includes("PokeCenter")
-              ? "pokecenter"
-              : href.includes("moveTutor")
-                ? "move_tutor"
-                : href.includes("legendaryEncounter")
-                  ? "legendary"
-                  : href.includes("questionMark")
-                    ? "question"
-                    : href.includes("tradeIcon")
-                      ? "trade"
-                      : "unknown";
-      return { g, idx, href, surfaceKind };
-    });
-
-    return {
-      empty: false as const,
-      lowHp,
-      nFainted,
-      nCritical,
-      hpRatio,
-      currentMap,
-      eliteIndex,
-      team,
-      teamRaw,
-      bagItemIds,
-      candidates: candidates.map(({ idx, href, surfaceKind }) => ({ idx, href, surfaceKind })),
-    };
-  })) as MapPageOk | { empty: true; reason: string };
+  const snapshot = domResult.empty
+    ? domResult
+    : {
+        empty: false as const,
+        lowHp,
+        nFainted,
+        nCritical,
+        hpRatio,
+        currentMap: gs.currentMap,
+        eliteIndex: gs.eliteIndex,
+        team: gs.team.map((p): TeamMemberBrief => ({ types: p.types })),
+        teamRaw: gs.team,
+        bagItemIds: gs.items.map((it) => it.id).filter(Boolean),
+        candidates: domResult.candidates,
+      };
 
   if (snapshot.empty || snapshot.candidates.length === 0) {
     console.log(`  [map] ${"reason" in snapshot ? snapshot.reason : "no candidates"}`);
@@ -159,19 +124,14 @@ export async function handleMap(page: Page): Promise<void> {
         ? computeTeamOrderForQuestionMark(snapshot.team, context)
         : computeTeamOrder(snapshot.team, prep.leadTypingsPool);
     await page.evaluate((permutation: number[]) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const st = (window as any).state;
-      const team = st?.team;
+      const w = window as unknown as { state: { team: unknown[] }; renderTeamBar?: (t: unknown[]) => void; saveRun?: () => void };
+      const team = w.state?.team;
       if (!Array.isArray(team) || team.length === 0) return;
       const next = permutation.map((i) => team[i]).filter(Boolean);
       if (next.length !== team.length) return;
       team.splice(0, team.length, ...next);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rtb = (window as any).renderTeamBar;
-      if (typeof rtb === "function") rtb(team);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const save = (window as any).saveRun;
-      if (typeof save === "function") save();
+      if (typeof w.renderTeamBar === "function") w.renderTeamBar(team);
+      if (typeof w.saveRun === "function") w.saveRun();
     }, order);
     const detail =
       chosen.surfaceKind === "question"

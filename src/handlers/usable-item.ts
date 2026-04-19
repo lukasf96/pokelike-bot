@@ -3,6 +3,7 @@ import type { Page } from "puppeteer";
 import { CROSS_SPECIES_EVOLUTION_BST, GEN1_EVOLUTIONS } from "../data/gen1-evolutions.js";
 import { GEN1_SPECIES_BST } from "../data/gen1-species.js";
 import type { TeamMemberForItem } from "../item-intel.js";
+import { readGameState } from "../game-state.js";
 import { sleep } from "../page-utils.js";
 
 function speciesBaseStatTotal(speciesId: number): number | undefined {
@@ -133,26 +134,17 @@ function shouldUseMaxRevive(snap: UsableSnapshot): boolean {
 }
 
 async function readUsableSnapshot(page: Page): Promise<UsableSnapshot> {
-  return page.evaluate(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const st = (window as any).state;
-    const team: TeamMemberForItem[] = (st?.team ?? []).map((p: Record<string, unknown>) => ({
-      types: Array.isArray(p.types) ? (p.types as string[]) : [],
-      baseStats: p.baseStats as TeamMemberForItem["baseStats"],
-      level: Number(p.level ?? 1),
-      speciesId: Number(p.speciesId ?? 0),
-      currentHp: typeof p.currentHp === "number" ? p.currentHp : undefined,
-      maxHp: typeof p.maxHp === "number" ? p.maxHp : undefined,
-      heldItem: p.heldItem as TeamMemberForItem["heldItem"],
-    }));
-    const bag: BagEntry[] = (st?.items ?? []).map((it: Record<string, unknown>, idx: number) => ({
-      idx,
-      id: String(it.id ?? ""),
-      usable: !!it.usable,
-    }));
-    const currentMap = Number(st?.currentMap ?? 0);
-    return { team, bag, currentMap };
-  });
+  const gs = await readGameState(page);
+  const team: TeamMemberForItem[] = gs.team.map((p) => ({
+    types: p.types,
+    baseStats: p.baseStats,
+    level: p.level,
+    speciesId: p.speciesId,
+    currentHp: p.currentHp,
+    maxHp: p.maxHp,
+    heldItem: p.heldItem ?? undefined,
+  }));
+  return { team, bag: gs.items, currentMap: gs.currentMap };
 }
 
 async function clickUsableItemOnSlot(page: Page, bagIdx: number, slotIdx: number): Promise<boolean> {

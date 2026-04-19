@@ -1,25 +1,27 @@
 import type { Page } from "puppeteer";
 
 import { itemNameToId, scoreItemPick, type TeamMemberForItem } from "../item-intel.js";
+import { readGameState } from "../game-state.js";
 import { sleep } from "../page-utils.js";
 
 export async function handleItem(page: Page): Promise<void> {
-  const snapshot = await page.evaluate(() => {
-    const cards = Array.from(document.querySelectorAll<HTMLElement>("#item-choices .item-card"));
-    const names = cards.map((c) => c.querySelector<HTMLElement>(".item-name")?.textContent?.trim() ?? "");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const st = (window as any).state;
-    const team: TeamMemberForItem[] = (st?.team ?? []).map((p: Record<string, unknown>) => ({
-      types: Array.isArray(p.types) ? (p.types as string[]) : [],
-      baseStats: p.baseStats as TeamMemberForItem["baseStats"],
-      level: Number(p.level ?? 1),
-      speciesId: Number(p.speciesId ?? 0),
-      currentHp: typeof p.currentHp === "number" ? p.currentHp : undefined,
-      maxHp: typeof p.maxHp === "number" ? p.maxHp : undefined,
-      heldItem: p.heldItem as TeamMemberForItem["heldItem"],
-    }));
-    return { names, team };
-  });
+  const [gs, names] = await Promise.all([
+    readGameState(page),
+    page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLElement>("#item-choices .item-card"))
+        .map((c) => c.querySelector<HTMLElement>(".item-name")?.textContent?.trim() ?? ""),
+    ),
+  ]);
+  const team: TeamMemberForItem[] = gs.team.map((p) => ({
+    types: p.types,
+    baseStats: p.baseStats,
+    level: p.level,
+    speciesId: p.speciesId,
+    currentHp: p.currentHp,
+    maxHp: p.maxHp,
+    heldItem: p.heldItem ?? undefined,
+  }));
+  const snapshot = { names, team };
 
   let bestIdx = 0;
   let bestScore = -Infinity;

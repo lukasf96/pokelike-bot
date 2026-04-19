@@ -1,6 +1,7 @@
 import type { Page } from "puppeteer";
 
 import { GEN1_SPECIES_BST } from "../data/gen1-species.js";
+import { readGameState } from "../game-state.js";
 import { clickSel, sleep } from "../page-utils.js";
 
 interface ShinyScreenSnapshot {
@@ -31,15 +32,10 @@ function shouldTakeShiny(snapshot: ShinyScreenSnapshot): boolean {
 }
 
 async function handleShiny(page: Page): Promise<void> {
-  const snapshot = await page.evaluate((): ShinyScreenSnapshot => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const st = (window as any).state;
-    const rawTeam = (st?.team ?? []) as Array<{ speciesId?: number; level?: number }>;
-    const team = rawTeam.map((p) => ({
-      speciesId: Number(p.speciesId ?? 0),
-      level: Number(p.level ?? 1),
-    }));
+  const gs = await readGameState(page);
+  const team = gs.team.map((p) => ({ speciesId: p.speciesId, level: p.level }));
 
+  const { shinySpeciesId, shinyLevel } = await page.evaluate((): { shinySpeciesId: number; shinyLevel: number } => {
     const img = document.querySelector<HTMLImageElement>("#shiny-content img.poke-sprite");
     const src = img?.getAttribute("src") ?? "";
     const idFromShiny = src.match(/\/pokemon\/shiny\/(\d+)\.png/i);
@@ -55,8 +51,10 @@ async function handleShiny(page: Page): Promise<void> {
     const lvMatch = lvText.match(/(\d+)/);
     const shinyLevel = lvMatch ? Number(lvMatch[1]) : 0;
 
-    return { team, shinySpeciesId, shinyLevel };
+    return { shinySpeciesId, shinyLevel };
   });
+
+  const snapshot: ShinyScreenSnapshot = { team, shinySpeciesId, shinyLevel };
 
   const take = shouldTakeShiny(snapshot);
 

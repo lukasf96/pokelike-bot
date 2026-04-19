@@ -1,5 +1,6 @@
 import type { Page } from "puppeteer";
 
+import { readGameState } from "../game-state.js";
 import { sleep } from "../page-utils.js";
 
 /** Matches `EEVEE_EVOLUTIONS` render order in game `data.js`. */
@@ -54,21 +55,11 @@ export function pickEeveelutionCardIndex(currentMap: number, rawTeamTypes: strin
 }
 
 export async function handleEeveeChoice(page: Page): Promise<void> {
-  const ctx = await page.evaluate(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const st = (window as any).state;
-    const currentMap = Number(st?.currentMap ?? 0);
-    const teamTypes: string[] = [];
-    for (const p of st?.team ?? []) {
-      const rec = p as { types?: unknown };
-      if (Array.isArray(rec.types)) {
-        for (const t of rec.types) {
-          if (typeof t === "string") teamTypes.push(t);
-        }
-      }
-    }
-    return { currentMap, teamTypes };
-  });
+  const gs = await readGameState(page);
+  const ctx = {
+    currentMap: gs.currentMap,
+    teamTypes: gs.team.flatMap((p) => p.types),
+  };
 
   const idx = pickEeveelutionCardIndex(ctx.currentMap, ctx.teamTypes);
   const label = EEVEE_CARD_LABELS[idx] ?? "Vaporeon";

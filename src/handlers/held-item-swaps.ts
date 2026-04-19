@@ -5,39 +5,29 @@ import {
   optimalHeldItemPermutation,
   type TeamMemberForItem,
 } from "../item-intel.js";
+import { readGameState } from "../game-state.js";
 import { sleep } from "../page-utils.js";
 
-interface BagEntrySnapshot {
-  idx: number;
-  id: string;
-  usable: boolean;
+function gsTeam(gs: Awaited<ReturnType<typeof readGameState>>): TeamMemberForItem[] {
+  return gs.team.map((p) => ({
+    types: p.types,
+    baseStats: p.baseStats,
+    level: p.level,
+    speciesId: p.speciesId,
+    currentHp: p.currentHp,
+    maxHp: p.maxHp,
+    heldItem: p.heldItem ?? undefined,
+  }));
 }
 
-async function readTeamBagSnapshot(page: Page): Promise<{ team: TeamMemberForItem[]; bag: BagEntrySnapshot[] }> {
-  return page.evaluate(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const st = (window as any).state;
-    const team = (st?.team ?? []).map((p: Record<string, unknown>) => ({
-      types: Array.isArray(p.types) ? (p.types as string[]) : [],
-      baseStats: p.baseStats as TeamMemberForItem["baseStats"],
-      level: Number(p.level ?? 1),
-      speciesId: Number(p.speciesId ?? 0),
-      currentHp: typeof p.currentHp === "number" ? p.currentHp : undefined,
-      maxHp: typeof p.maxHp === "number" ? p.maxHp : undefined,
-      heldItem: p.heldItem as TeamMemberForItem["heldItem"],
-    }));
-    const bag: BagEntrySnapshot[] = (st?.items ?? []).map((it: Record<string, unknown>, idx: number) => ({
-      idx,
-      id: String(it.id ?? ""),
-      usable: !!it.usable,
-    }));
-    return { team, bag };
-  });
+async function readTeamBagSnapshot(page: Page): Promise<{ team: TeamMemberForItem[]; bag: { idx: number; id: string; usable: boolean }[] }> {
+  const gs = await readGameState(page);
+  return { team: gsTeam(gs), bag: gs.items };
 }
 
 async function readTeamForItems(page: Page): Promise<TeamMemberForItem[]> {
-  const s = await readTeamBagSnapshot(page);
-  return s.team;
+  const gs = await readGameState(page);
+  return gsTeam(gs);
 }
 
 /** Click `#item-bar` badge at `bagBadgeIdx` (same order as `state.items`), then Equip/Swap onto `slotIdx`. */
