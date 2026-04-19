@@ -25,10 +25,22 @@ interface UsableSnapshot {
   team: TeamMemberForItem[];
   bag: GameSnapshot["bag"];
   currentMap: number;
+  /** Pokecenter is among the immediate map candidates — heal is "free" next move. */
+  pcAvailable: boolean;
 }
 
-function fromGame(game: GameSnapshot): UsableSnapshot {
-  return { team: selectItemTeam(game), bag: game.bag, currentMap: game.currentMap };
+function fromTick(tick: Tick): UsableSnapshot | null {
+  if (!tick.game) return null;
+  const game = tick.game;
+  const pcAvailable = (tick.ui.map?.candidates ?? []).some(
+    (c) => c.surfaceKind === "pokecenter",
+  );
+  return {
+    team: selectItemTeam(game),
+    bag: game.bag,
+    currentMap: game.currentMap,
+    pcAvailable,
+  };
 }
 
 function sumBst(m: TeamMemberForItem): number {
@@ -195,6 +207,13 @@ function shouldUseMaxRevive(snap: UsableSnapshot): boolean {
   const alive = snap.team.filter((p) => (p.currentHp ?? 1) > 0).length;
   const hasFainted = snap.team.some((p) => (p.currentHp ?? 1) <= 0);
   if (!hasFainted) return false;
+  // PC right next door = free heal that revives EVERY fainted mon. Burning a
+  // max_revive here wastes a precious item to revive a single slot when the
+  // PC would revive all of them for free. Diagnostic: Run 1 (last batch) used
+  // a max_revive at t131, then walked into pokecenter at t131+ as the only
+  // remaining candidate — exactly the bug the user spotted. Skip in this
+  // case unless we're on the Elite Four maps (no healing between fights).
+  if (snap.pcAvailable && snap.currentMap < 8) return false;
   // Map 9 (the Elite Four — currentMap === 8) has *no healing between fights*,
   // so max_revive there is uniquely valuable. Pre-Map 8 we hoard them: only
   // burn one when the team is genuinely thin (≤2 alive). On Map 8 prep we
@@ -276,8 +295,8 @@ export async function maybeUseUsableItems(initialTick: Tick, ctx: HandlerCtx): P
   let tick: Tick = initialTick;
 
   for (let iter = 0; iter < maxIter; iter += 1) {
-    if (!tick.game) break;
-    const snap = fromGame(tick.game);
+    const snap = fromTick(tick);
+    if (!snap) break;
     const next = planNextUse(snap);
     if (!next) break;
 
