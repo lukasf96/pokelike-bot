@@ -1,5 +1,7 @@
 import {
   type MapCandidateBrief,
+  type NodeIntel,
+  type ScoreCandidateContext,
   inferNodeIntel,
   pickBattlePrepIntel,
   scoreCandidate,
@@ -49,10 +51,32 @@ export const handleMap: Handler = async (initialTick, ctx) => {
   const hp = selectTeamHp(game);
   const context = { currentMap: game.currentMap, eliteIndex: game.eliteIndex };
 
+  // ── Boss lookahead ──────────────────────────────────────────────────────
+  // pWinBoss tells us whether to detour for trainers / PC even if no boss
+  // node is in the current candidate set. bossImminent flips when the boss
+  // node is *one click away* (final pre-boss layer).
+  const bossIntel: NodeIntel =
+    game.currentMap >= 8
+      ? { category: "elite", eliteIndex: game.eliteIndex }
+      : { category: "gym", mapIndex: game.currentMap };
+  const pWinBoss = estimateBattleWinProbability(bossIntel, teamRaw, bagItemIds, context);
+  const bossImminent = candidates.some(
+    (c) => c.surfaceKind === "gym" || c.surfaceKind === "elite",
+  );
+  const pcAvailable = candidates.some((c) => c.surfaceKind === "pokecenter");
+
+  const scoreCtx: ScoreCandidateContext = {
+    ...context,
+    hpRatio: hp.ratio,
+    bossImminent,
+    pcAvailable,
+    pWinBoss,
+  };
+
   const scored = candidates.map((c) => {
     const cand: MapCandidateBrief = { href: c.href, surfaceKind: c.surfaceKind };
     const intel = inferNodeIntel(cand.href, context);
-    const baseScore = scoreCandidate(hp.lowHp, cand, teamBrief, context);
+    const baseScore = scoreCandidate(hp.lowHp, cand, teamBrief, scoreCtx);
     const pWin = estimateBattleWinProbability(intel, teamRaw, bagItemIds, context);
     const adjusted = adjustMapScoreWithWinProbability(baseScore, intel, hp.lowHp, pWin);
     return { c, pWin, adjusted };
@@ -99,7 +123,7 @@ export const handleMap: Handler = async (initialTick, ctx) => {
   );
   logAction(
     "map",
-    `Team hp ${Math.round(hp.ratio * 100)}% · faint ${hp.fainted} · crit ${hp.critical} · lowHp ${hp.lowHp} · map ${game.currentMap} · elite ${game.eliteIndex}`,
+    `Team hp ${Math.round(hp.ratio * 100)}% · faint ${hp.fainted} · crit ${hp.critical} · lowHp ${hp.lowHp} · map ${game.currentMap} · elite ${game.eliteIndex} · pWinBoss ${pWinBoss.toFixed(2)}${bossImminent ? " · BOSS_IMMINENT" : ""}${pcAvailable ? " · pc" : ""}`,
   );
 
   await sleep(1200);

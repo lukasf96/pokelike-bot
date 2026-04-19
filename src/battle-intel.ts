@@ -94,6 +94,10 @@ const ELITE_TEAM_TYPES: string[][][] = [
 
 export interface TeamMemberBrief {
   types: string[];
+  /** Optional — when present, used to demote fainted members in lead ordering. */
+  isFainted?: boolean;
+  /** Optional — used as a tie-break in lead ordering so under-levelled good-typing mons don't lead. */
+  level?: number;
 }
 
 export type NodeIntel =
@@ -243,15 +247,24 @@ export function enemyTypingsForIntel(intel: NodeIntel, context: IntelContext): s
 export function leadTypingsPoolForIntel(intel: NodeIntel, context: IntelContext): string[][] {
   switch (intel.category) {
     case "gym": {
-      const mi = Math.min(Math.max(0, intel.mapIndex), GYM_FIRST_LEAD_TYPES.length - 1);
-      const t = GYM_FIRST_LEAD_TYPES[mi] ?? ["Normal"];
-      return [t];
+      // For gym fights the lead does need to handle the boss's first mon, but
+      // it also has to survive long enough to soften the rest. We weight the
+      // first mon double and include the full roster (game.js iterates the
+      // whole gym team in order). Sorting by *expected* matchup over this
+      // pool produces a lead that fights well throughout the fight.
+      const mi = Math.min(Math.max(0, intel.mapIndex), GYM_TEAM_TYPES.length - 1);
+      const team = GYM_TEAM_TYPES[mi] ?? [];
+      const leadFirst = GYM_FIRST_LEAD_TYPES[mi] ?? team[0] ?? ["Normal"];
+      if (team.length === 0) return [leadFirst];
+      return [leadFirst, ...team];
     }
     case "elite": {
       const ei = Math.min(Math.max(0, intel.eliteIndex), ELITE_TEAM_TYPES.length - 1);
-      const team = ELITE_TEAM_TYPES[ei];
-      const lead = team?.[0] ?? ["Normal"];
-      return [lead];
+      const team = ELITE_TEAM_TYPES[ei] ?? [];
+      const lead = team[0] ?? ["Normal"];
+      if (team.length === 0) return [lead];
+      // Weight the lead double — it determines the opener exchange.
+      return [lead, ...team];
     }
     case "legendary":
       return LEGENDARY_SPECIES_IDS.map((id) => typesForSpeciesId(id));
@@ -269,6 +282,9 @@ export function leadTypingsPoolForIntel(intel: NodeIntel, context: IntelContext)
 
 function leadScoreForTypes(p: TeamMemberBrief | undefined, leadEnemyTypes: string[]): number {
   if (!p) return -1e9;
+  // Fainted Pokémon would be auto-skipped by the engine on send-out, wasting
+  // initiative. Push them firmly to the back of the order.
+  if (p.isFainted) return -1e8;
   const stab = attackingStabTypes(p.types);
   let bestOff = 0;
   for (const st of stab) {
@@ -279,7 +295,10 @@ function leadScoreForTypes(p: TeamMemberBrief | undefined, leadEnemyTypes: strin
   for (const e of est) {
     worstDef = Math.max(worstDef, typeEffectiveness(e, p.types));
   }
-  return bestOff * 6 - worstDef * 3;
+  // Tiny level term: favour higher-level mons among same-typing ties so we
+  // don't lead a Lv8 Pikachu into a Lv20 Starmie when a Lv13 backup exists.
+  const levelTerm = (p.level ?? 0) * 0.05;
+  return bestOff * 6 - worstDef * 3 + levelTerm;
 }
 
 /**
@@ -347,27 +366,63 @@ export interface MapCandidateBrief {
   surfaceKind: string;
 }
 
+export interface ScoreCandidateContext extends IntelContext {
+  /** Team HP ratio in [0,1]; used together with `bossImminent` for PC urgency. */
+  hpRatio: number;
+  /** True when at least one candidate on this layer is the boss (we're 1 click from it). */
+  bossImminent: boolean;
+  /** True when at least one candidate on this layer is a Pokemon Center (likely layer 7). */
+  pcAvailable: boolean;
+  /** Monte-Carlo win probability against the upcoming boss with current team. */
+  pWinBoss: number;
+}
+
 export function scoreCandidate(
   lowHp: boolean,
   cand: MapCandidateBrief,
   team: TeamMemberBrief[],
-  context: IntelContext,
+  context: IntelContext | ScoreCandidateContext,
 ): number {
+  // Boss-adjacency / PC-availability / pWinBoss live on ScoreCandidateContext —
+  // older callers (tests, etc.) get the conservative defaults so behaviour
+  // outside the map handler is unchanged.
+  const ctx = context as Partial<ScoreCandidateContext>;
+  const hpRatio = typeof ctx.hpRatio === "number" ? ctx.hpRatio : 1;
+  const bossImminent = ctx.bossImminent === true;
+  const pcAvailable = ctx.pcAvailable === true;
+  const pWinBoss = typeof ctx.pWinBoss === "number" ? ctx.pWinBoss : 1;
+
+  // Pre-boss urgency mode (boss reachable in 1–2 layers): the Pokemon Center
+  // layer is the *last* heal — refusing it routinely costs the run. Catch
+  // value collapses (no time to level it), Trainer value spikes (only +2 XP
+  // source pre-Map 4 to close the level gap to the boss).
+  const bossUrgency = bossImminent || (pcAvailable && hpRatio < 0.95);
+  const bossWinShaky = pWinBoss < 0.55;
+
   let base = 1;
 
   if (cand.surfaceKind === "legendary") base = 8;
-  else if (cand.surfaceKind === "pokecenter") base = lowHp ? 10 : -2;
-  else if (cand.surfaceKind === "catch") base = 4;
-  else if (cand.surfaceKind === "item" || cand.surfaceKind === "move_tutor") base = 3;
+  else if (cand.surfaceKind === "pokecenter") {
+    if (bossUrgency && hpRatio < 0.95) base = 60;
+    else if (lowHp) base = 10;
+    else base = -2;
+  } else if (cand.surfaceKind === "catch") {
+    // On the layer immediately before boss, a freshly caught low-level mon
+    // can't help — biased away. Otherwise standard catch value.
+    base = bossImminent ? -3 : 4;
+  } else if (cand.surfaceKind === "item" || cand.surfaceKind === "move_tutor") base = 3;
   else if (cand.surfaceKind === "question") base = expectedQuestionMarkSurfaceBase();
   else if (
     cand.surfaceKind === "battle" ||
     cand.surfaceKind === "trainer" ||
     cand.surfaceKind === "gym" ||
     cand.surfaceKind === "elite"
-  )
-    base = 1;
-  else if (cand.surfaceKind === "trade") base = 1;
+  ) {
+    // Trainer fights are the only +2 XP source pre-Map 4. When the boss
+    // pWin is shaky and we're not at the boss yet, prefer them.
+    if (cand.surfaceKind === "trainer" && bossWinShaky && !bossImminent) base = 6;
+    else base = 1;
+  } else if (cand.surfaceKind === "trade") base = 1;
 
   const intel = inferNodeIntel(cand.href, context);
   const typings =

@@ -25,6 +25,23 @@ export const BOSS_TYPES_BY_MAP: readonly string[][] = [
   // Map 8 – Elite Four (all types present)
 ];
 
+/**
+ * For the *next* boss specifically (mapIndex of the boss we're about to fight),
+ * the lead typing matters more than the rest of the roster — the lead is what
+ * decides the opener exchange. Used for the urgency bonus.
+ */
+const NEXT_BOSS_LEAD_TYPES: readonly string[][] = [
+  ["Rock", "Ground"], // Brock — Geodude
+  ["Water"],          // Misty — Staryu
+  ["Electric"],       // Lt. Surge — Pikachu
+  ["Grass"],          // Erika — Tangela
+  ["Poison"],         // Koga — Koffing
+  ["Psychic"],        // Sabrina — Mr. Mime
+  ["Fire"],           // Blaine — Ponyta
+  ["Ground"],         // Giovanni — Dugtrio
+  ["Water", "Ice"],   // Lorelei — Dewgong
+];
+
 /** Late-game carry types that score a large bonus on Maps 6–8. */
 const LATE_GAME_BONUS_TYPES = new Set(["Ice", "Electric", "Rock", "Ghost"]);
 
@@ -73,6 +90,30 @@ function coveredAttackTypes(teamTypes: string[][]): Set<string> {
   return covered;
 }
 
+/** Count of team members whose primary STAB equals each lowercase type. */
+function stabFrequency(teamTypes: string[][]): Map<string, number> {
+  const freq = new Map<string, number>();
+  for (const types of teamTypes) {
+    for (const t of attackingStabTypes(types)) {
+      const lc = t.toLowerCase();
+      freq.set(lc, (freq.get(lc) ?? 0) + 1);
+    }
+  }
+  return freq;
+}
+
+/** True if any team member's STAB hits `bossTypes` super-effectively (≥2x). */
+function teamHasCounterFor(teamTypes: string[][], bossTypes: readonly string[]): boolean {
+  for (const types of teamTypes) {
+    for (const stab of attackingStabTypes(types)) {
+      for (const bt of bossTypes) {
+        if (typeEffectiveness(stab, [bt]) >= 2) return true;
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * Score a catch candidate per B2 recommendation.
  *
@@ -91,12 +132,10 @@ export function scoreCatchCandidate(
 ): number {
   const sqrtLevel = Math.sqrt(Math.max(1, level));
 
-  // Base: BST × √level — rewards strong species at higher levels
-  let score = bst(speciesId) * sqrtLevel;
-
-  // Evolution potential: use final-evo BST for the scaling component
+  // Base: final-evo BST × √level — rewards species that scale into the late
+  // game, while still acknowledging current level.
   const finalBst = finalEvoBst(speciesId);
-  score = finalBst * sqrtLevel;
+  let score = finalBst * sqrtLevel;
 
   // Evolution tier bonuses / penalties
   const steps = stepsToFinalEvo(speciesId);
@@ -108,26 +147,74 @@ export function scoreCatchCandidate(
     score -= 15;   // base form far from final
   }
 
-  // Type coverage: reward types the team is missing against upcoming bosses
   const covered = coveredAttackTypes(teamTypes);
-  const candidateStab = attackingStabTypes(speciesTypes(speciesId)).map((t) => t.toLowerCase());
+  const stabFreq = stabFrequency(teamTypes);
+  const candidateStabRaw = attackingStabTypes(speciesTypes(speciesId));
+  const candidateStab = candidateStabRaw.map((t) => t.toLowerCase());
 
-  // Bosses from current map onward
-  for (let m = mapIndex; m < BOSS_TYPES_BY_MAP.length; m++) {
-    for (const bossType of BOSS_TYPES_BY_MAP[m]!) {
-      const effective = typeEffectiveness(bossType, [bossType]);
-      // Check if candidate attacks the boss type super-effectively and team lacks this
-      for (const stab of candidateStab) {
-        const mult = typeEffectiveness(stab, [bossType]);
-        if (mult >= 2 && !covered.has(stab)) {
-          score += 25;
-          break; // one bonus per boss type, not per STAB move
-        }
+  // ── (a) Next-boss urgency ────────────────────────────────────────────────
+  // The boss whose map we're currently on (or about to enter) dominates our
+  // immediate survival. Reward candidates that hit it super-effectively, and
+  // *heavily* reward them when the team currently has nobody who does.
+  // Decay quickly for boss maps further away.
+  for (let m = mapIndex; m < BOSS_TYPES_BY_MAP.length && m < mapIndex + 4; m++) {
+    const distance = m - mapIndex;
+    const boss = BOSS_TYPES_BY_MAP[m]!;
+    const lead = NEXT_BOSS_LEAD_TYPES[m] ?? boss;
+
+    // Coverage gap: does the team already have a counter for this boss?
+    const hasCounterAlready = teamHasCounterFor(teamTypes, lead);
+
+    let hitsBoss = false;
+    let hitsLead = false;
+    for (const stab of candidateStab) {
+      for (const bt of boss) {
+        if (typeEffectiveness(stab, [bt]) >= 2) hitsBoss = true;
       }
+      for (const lt of lead) {
+        if (typeEffectiveness(stab, [lt]) >= 2) hitsLead = true;
+      }
+    }
+
+    if (hitsLead && !hasCounterAlready) {
+      // Team has *no* counter for this boss yet — major urgency.
+      // Distance 0: 200 (this map's boss); 1: 110; 2: 50; 3: 25.
+      const urgency = [200, 110, 50, 25][distance] ?? 0;
+      score += urgency;
+    } else if (hitsBoss) {
+      // Team has someone, but more is welcome. Smaller bonus, decays harder.
+      const bonus = [40, 22, 12, 6][distance] ?? 0;
+      score += bonus;
+    }
+
+    // Penalty: if the candidate's STAB is *resisted* by every boss member
+    // (≤0.5x to all) and the boss is in the next 2 maps, don't bring more
+    // dead weight (e.g. Water against Misty).
+    if (distance <= 1) {
+      let allResisted = true;
+      for (const stab of candidateStab) {
+        for (const bt of boss) {
+          if (typeEffectiveness(stab, [bt]) > 0.5) {
+            allResisted = false;
+            break;
+          }
+        }
+        if (!allResisted) break;
+      }
+      if (allResisted) score -= distance === 0 ? 80 : 35;
     }
   }
 
-  // Late-game carry bonus: Ice/Electric/Rock/Ghost STAB for Maps 6+
+  // ── (b) Duplicate STAB penalty ───────────────────────────────────────────
+  // The 4th Water mon is far less valuable than the 1st. −30 per duplicate
+  // STAB type the team already has 2+ copies of.
+  for (const stab of candidateStab) {
+    const dupes = stabFreq.get(stab) ?? 0;
+    if (dupes >= 2) score -= 30 * (dupes - 1);
+    else if (dupes === 1 && covered.has(stab)) score -= 8; // mild duplicate
+  }
+
+  // ── (c) Late-game carry bonus (Ice/Electric/Rock/Ghost STAB for Maps 6+) ─
   if (mapIndex >= 6) {
     for (const stab of candidateStab) {
       if (LATE_GAME_BONUS_TYPES.has(stab.charAt(0).toUpperCase() + stab.slice(1))) {
@@ -137,16 +224,9 @@ export function scoreCatchCandidate(
     }
   }
 
-  // Duplicate penalty: same species already on team
-  // (teamTypes doesn't include speciesId, so we can't check this here —
-  //  the caller should pass this info separately; skip for now)
-
-  // Shiny bonus: only if species also has decent base score (finalBst >= 400)
-  if (isShiny && finalBst >= 400) {
-    score += 30;
-  } else if (isShiny) {
-    score += 10; // small shiny bonus even for weak species
-  }
+  // ── (d) Shiny bonus ──────────────────────────────────────────────────────
+  if (isShiny && finalBst >= 400) score += 30;
+  else if (isShiny) score += 10;
 
   return score;
 }

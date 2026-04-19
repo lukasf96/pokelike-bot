@@ -52,7 +52,11 @@ export function selectReleaseTeam(g: GameSnapshot): ReleaseTeamMember[] {
 }
 
 export function selectTeamBrief(g: GameSnapshot): TeamMemberBrief[] {
-  return g.team.map((p) => ({ types: p.types }));
+  return g.team.map((p) => ({
+    types: p.types,
+    isFainted: p.hp.current <= 0,
+    level: p.level,
+  }));
 }
 
 export function selectTeamHp(g: GameSnapshot): TeamHpSummary {

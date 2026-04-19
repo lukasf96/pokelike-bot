@@ -66,6 +66,46 @@ export function coveragePenaltyForRemovingSlot(
   return perRole * rolesLost;
 }
 
+/**
+ * Inverse of `coveragePenaltyForRemovingSlot`: a *bonus to release* (so it's
+ * subtracted from `slotPowerScore`) when a slot's STAB type is duplicated on
+ * the team and useless against the next boss. This is what finally lets
+ * Squirtle (Water) be released by Map 2 when a Pikachu (Electric) is sitting
+ * in the wings — currently `slotPowerScore = bst × √level` keeps a levelled
+ * Squirtle stickier than the actual Misty answer.
+ */
+export function redundancyReleaseBias(
+  team: ReleaseTeamMember[],
+  slotIndex: number,
+  mapIndex: number,
+): number {
+  const m = team[slotIndex]!;
+  const myStabs = speciesAttackStabTypes(m.speciesId);
+  const others = teamStabTypeSet(team, slotIndex);
+  // Boss typings for the *next* boss (or current map's boss if we haven't
+  // beaten it yet). We use `BOSS_TYPES_BY_MAP[mapIndex]` — `currentMap` is the
+  // map currently being played.
+  const nextBoss = BOSS_TYPES_BY_MAP[Math.min(mapIndex, BOSS_TYPES_BY_MAP.length - 1)] ?? [];
+
+  let bias = 0;
+  for (const stab of myStabs) {
+    const lc = stab.toLowerCase();
+    const isDup = others.has(lc);
+    if (!isDup) continue; // not redundant; protected by coverage
+    // Resisted by every boss typing? → useless dead weight.
+    let allResisted = true;
+    let anySE = false;
+    for (const bt of nextBoss) {
+      const eff = typeEffectiveness(stab, [bt]);
+      if (eff > 0.5) allResisted = false;
+      if (eff >= 2) anySE = true;
+    }
+    if (allResisted) bias += 350; // strong release bias
+    else if (!anySE) bias += 80;  // mildly redundant + neutral, lower bias
+  }
+  return bias;
+}
+
 /** Shiny, key held items, tutor tier 2, Eevee + Moon Stone. */
 export function isHardProtectedRelease(member: ReleaseTeamMember, moonStoneInBag: boolean): boolean {
   if (member.isShiny) return true;
@@ -77,16 +117,25 @@ export function isHardProtectedRelease(member: ReleaseTeamMember, moonStoneInBag
 }
 
 /**
- * Slot to release when the team is full (swap screen). Lowest `slotPowerScore` among
- * non-protected members; fallback if all protected matches legacy behavior.
+ * Slot to release when the team is full (swap screen). Lowest effective power
+ * (raw `slotPowerScore` minus a `redundancyReleaseBias`) among non-protected
+ * members; fallback if all are protected matches legacy behavior.
+ *
+ * `mapIndex` is the *current* map (so `redundancyReleaseBias` knows which boss
+ * is "next"). When unknown, pass 0 — the bias degrades to "release dead-weight
+ * Water mons before Brock", which is also the right behaviour.
  */
-export function pickSwapReleaseSlot(team: ReleaseTeamMember[], moonStoneInBag: boolean): number {
+export function pickSwapReleaseSlot(
+  team: ReleaseTeamMember[],
+  moonStoneInBag: boolean,
+  mapIndex: number = 0,
+): number {
   let best = -1;
   let bestScore = Infinity;
   for (let i = 0; i < team.length; i++) {
     const m = team[i]!;
     if (isHardProtectedRelease(m, moonStoneInBag)) continue;
-    const s = slotPowerScore(m.speciesId, m.level);
+    const s = slotPowerScore(m.speciesId, m.level) - redundancyReleaseBias(team, i, mapIndex);
     if (s < bestScore) {
       bestScore = s;
       best = i;

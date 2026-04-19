@@ -1,8 +1,10 @@
+import { enemyTypingsForIntel, type NodeIntel } from "../battle-intel.js";
 import type { Handler } from "../state/handler.js";
 import { logAction } from "../logger.js";
 import {
   bestEmptySlotForHeldItem,
   bestPokemonIndexForHeldItem,
+  type HeldItemFitnessCtx,
   itemNameToId,
 } from "../item-intel.js";
 import { selectItemTeam } from "../state/selectors.js";
@@ -18,8 +20,21 @@ export const handleItemEquip: Handler = async (tick, { page }) => {
 
   const team = selectItemTeam(tick.game);
   const itemId = itemNameToId(modalSnap.itemName);
-  const emptyFirst = bestEmptySlotForHeldItem(itemId, team);
-  const bestAny = bestPokemonIndexForHeldItem(itemId, team);
+
+  const game = tick.game;
+  const intel: NodeIntel =
+    game.currentMap >= 8
+      ? { category: "elite", eliteIndex: game.eliteIndex }
+      : { category: "gym", mapIndex: game.currentMap };
+  const bossTypings = enemyTypingsForIntel(intel, {
+    currentMap: game.currentMap,
+    eliteIndex: game.eliteIndex,
+  });
+  const bossCtx: HeldItemFitnessCtx | undefined =
+    bossTypings.length > 0 ? { nextBossTypings: bossTypings } : undefined;
+
+  const emptyFirst = bestEmptySlotForHeldItem(itemId, team, bossCtx);
+  const bestAny = bestPokemonIndexForHeldItem(itemId, team, bossCtx);
   const preferredIdx =
     emptyFirst !== null && modalSnap.idxButtons.includes(emptyFirst) ? emptyFirst : bestAny;
   const equipIdx = modalSnap.idxButtons.includes(preferredIdx)

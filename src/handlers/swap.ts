@@ -12,7 +12,7 @@ export const handleSwap: Handler = async (tick, { page }) => {
   const team = selectReleaseTeam(tick.game);
   const moonStoneInBag = selectMoonStoneInBag(tick.game);
 
-  const slot = pickSwapReleaseSlot(team, moonStoneInBag);
+  const slot = pickSwapReleaseSlot(team, moonStoneInBag, tick.game.currentMap);
   const m = team[slot];
 
   const result = await page.evaluate((releaseIdx: number): string => {

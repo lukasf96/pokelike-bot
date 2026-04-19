@@ -17,13 +17,19 @@ export const handleStarter: Handler = async (_tick, { page }) => {
     )
     .catch(() => {});
 
+  // Bulbasaur (Grass/Poison) is the strongest first-two-bosses starter:
+  //   - Grass STAB is 2x vs Brock (Rock/Ground) AND 2x vs Misty (Water).
+  //   - Squirtle (Water) is 2x vs Brock but only 0.5x vs Misty — Misty is the
+  //     historical bottleneck (~70% of run losses).
+  //   - Charmander (Fire) is 0.5x vs both.
+  // Fall back to any starter if Bulbasaur is missing for some reason.
   const picked = await page.evaluate((): string => {
     const cards = Array.from(
       document.querySelectorAll<HTMLElement>("#starter-choices .poke-card"),
     );
     const preferred = cards.find((c) => {
       const t = c.textContent?.toLowerCase() ?? "";
-      return t.includes("squirtle");
+      return t.includes("bulbasaur");
     });
     const target = preferred ?? cards[0];
     const name =

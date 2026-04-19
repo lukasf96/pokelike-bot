@@ -131,7 +131,13 @@ function shouldUseMaxRevive(snap: UsableSnapshot): boolean {
   const alive = snap.team.filter((p) => (p.currentHp ?? 1) > 0).length;
   const hasFainted = snap.team.some((p) => (p.currentHp ?? 1) <= 0);
   if (!hasFainted) return false;
-  return snap.currentMap >= 8 || alive < 4;
+  // Map 9 (the Elite Four — currentMap === 8) has *no healing between fights*,
+  // so max_revive there is uniquely valuable. Pre-Map 8 we hoard them: only
+  // burn one when the team is genuinely thin (≤2 alive). On Map 8 prep we
+  // still hoard unless we're in real trouble.
+  if (snap.currentMap >= 8) return true;
+  if (snap.currentMap === 7) return alive < 2; // saving for the Elite Four
+  return alive < 3;
 }
 
 async function clickUsableItemOnSlot(page: Page, bagIdx: number, slotIdx: number): Promise<boolean> {

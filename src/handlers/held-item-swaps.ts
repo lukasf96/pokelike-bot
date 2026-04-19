@@ -1,14 +1,29 @@
 import type { Page } from "puppeteer";
 
+import { enemyTypingsForIntel, type NodeIntel } from "../battle-intel.js";
 import { logAction } from "../logger.js";
 import {
   heldItemFitnessAtSlot,
   optimalHeldItemPermutation,
+  type HeldItemFitnessCtx,
 } from "../item-intel.js";
 import type { HandlerCtx } from "../state/handler.js";
 import { selectItemTeam } from "../state/selectors.js";
-import type { Tick } from "../state/types.js";
+import type { GameSnapshot, Tick } from "../state/types.js";
 import { sleep } from "../page-utils.js";
+
+/** Build the next-boss item context from the current game snapshot. */
+function bossItemCtx(game: GameSnapshot): HeldItemFitnessCtx {
+  const intel: NodeIntel =
+    game.currentMap >= 8
+      ? { category: "elite", eliteIndex: game.eliteIndex }
+      : { category: "gym", mapIndex: game.currentMap };
+  const typings = enemyTypingsForIntel(intel, {
+    currentMap: game.currentMap,
+    eliteIndex: game.eliteIndex,
+  });
+  return typings.length > 0 ? { nextBossTypings: typings } : {};
+}
 
 /** Click `#item-bar` badge at `bagBadgeIdx` (same order as `state.items`), then Equip/Swap onto `slotIdx`. */
 async function equipBagHeldItemOntoSlot(page: Page, bagBadgeIdx: number, slotIdx: number): Promise<boolean> {
@@ -73,7 +88,8 @@ async function performOneHeldSwap(page: Page, teamIdxSource: number, teamIdxTarg
 export async function maybeOptimizeHeldItemSwaps(initialTick: Tick, ctx: HandlerCtx): Promise<void> {
   if (!initialTick.game) return;
   const team = selectItemTeam(initialTick.game);
-  const opt = optimalHeldItemPermutation(team);
+  const bossCtx = bossItemCtx(initialTick.game);
+  const opt = optimalHeldItemPermutation(team, bossCtx);
   if (!opt) return;
 
   const { slots, itemIds, bestPerm, before, after, gain } = opt;
@@ -125,6 +141,7 @@ export async function maybeEquipBagHeldItems(initialTick: Tick, ctx: HandlerCtx)
     const bag = tick.game.bag;
     const equipCandidates = bag.filter((b) => !b.usable && b.id);
     if (equipCandidates.length === 0) break;
+    const bossCtx = bossItemCtx(tick.game);
 
     const emptySlots: number[] = [];
     for (let i = 0; i < team.length; i += 1) {
@@ -138,7 +155,7 @@ export async function maybeEquipBagHeldItems(initialTick: Tick, ctx: HandlerCtx)
       let bestFit = -Infinity;
       for (const b of equipCandidates) {
         for (const s of emptySlots) {
-          const fit = heldItemFitnessAtSlot(b.id, s, team);
+          const fit = heldItemFitnessAtSlot(b.id, s, team, bossCtx);
           if (fit > bestFit) {
             bestFit = fit;
             bagIdx = b.idx;
@@ -152,8 +169,8 @@ export async function maybeEquipBagHeldItems(initialTick: Tick, ctx: HandlerCtx)
         for (let s = 0; s < team.length; s += 1) {
           const curId = team[s]?.heldItem?.id;
           if (!curId) continue;
-          const newFit = heldItemFitnessAtSlot(b.id, s, team);
-          const oldFit = heldItemFitnessAtSlot(curId, s, team);
+          const newFit = heldItemFitnessAtSlot(b.id, s, team, bossCtx);
+          const oldFit = heldItemFitnessAtSlot(curId, s, team, bossCtx);
           const delta = newFit - oldFit;
           if (delta < 0) continue;
           if (delta > bestDelta) {

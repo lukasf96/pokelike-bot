@@ -3,7 +3,7 @@
  * and battle.js (physical/special split, team-wide items).
  */
 
-import { attackingStabTypes } from "./battle-intel.js";
+import { attackingStabTypes, typeEffectiveness } from "./battle-intel.js";
 
 /** Inverse of data.js TYPE_ITEM_MAP — held item id → attacking type boosted (+50% damage). */
 export const TYPE_BOOST_ATTACK_TYPE: Record<string, string> = {
@@ -121,32 +121,57 @@ function metronomeTeamBonus(team: TeamMemberForItem[]): number {
   return 0;
 }
 
+/** Optional boss conditioning for `heldItemFitnessAtSlot`. */
+export interface HeldItemFitnessCtx {
+  /**
+   * Typings of the next boss roster (e.g. `[["Water"], ["Water","Psychic"]]`
+   * for Misty). When provided, an attacker that hits the boss super-effectively
+   * is rewarded — this prevents Choice Band landing on a Normal-type when an
+   * Electric Pokémon is sitting next to Misty.
+   */
+  nextBossTypings?: string[][];
+}
+
 /**
  * How well `itemId` fits on `team[slotIndex]` for reassignment / swap optimization.
  * Higher is better (same scale as best-slot search in `bestPokemonIndexForHeldItem`).
  */
-export function heldItemFitnessAtSlot(itemId: string, slotIndex: number, team: TeamMemberForItem[]): number {
+export function heldItemFitnessAtSlot(
+  itemId: string,
+  slotIndex: number,
+  team: TeamMemberForItem[],
+  ctx?: HeldItemFitnessCtx,
+): number {
   const p = team[slotIndex];
   if (!p) return -1e9;
+
+  const bossMult = nextBossOffenseMultiplier(p, ctx);
 
   const atkT = TYPE_BOOST_ATTACK_TYPE[itemId];
   if (atkT) {
     const mult = stabMultiplier(p.types, atkT);
-    return mult * bst(p) * Math.sqrt(Math.max(1, p.level));
+    // If this type-boost item's attack type doesn't even hit the next boss,
+    // shrink the bonus so we don't gift `mystic_water` to a Squirtle that
+    // can't hurt Misty.
+    const itemHitsBoss = nextBossOffenseFromAttackType(atkT, ctx);
+    return mult * bst(p) * Math.sqrt(Math.max(1, p.level)) * (itemHitsBoss * 0.6 + 0.4);
   }
 
+  // Items that scale with raw offense should reward attackers who actually
+  // damage the next boss. `bossMult` is in [0.5, 2.0]+ — we apply it only to
+  // damage-amplifying items, not bulk/utility items.
   switch (itemId) {
     case "choice_band":
-      return powerPhysical(p);
+      return powerPhysical(p) * bossMult;
     case "choice_specs":
-      return powerSpecial(p);
+      return powerSpecial(p) * bossMult;
     case "muscle_band": {
       const base = powerPhysical(p);
-      return isPhysicalAttacker(p) ? base * 1.35 : base * 0.55;
+      return (isPhysicalAttacker(p) ? base * 1.35 : base * 0.55) * bossMult;
     }
     case "wise_glasses": {
       const base = powerSpecial(p);
-      return !isPhysicalAttacker(p) ? base * 1.35 : base * 0.55;
+      return (!isPhysicalAttacker(p) ? base * 1.35 : base * 0.55) * bossMult;
     }
     case "choice_scarf":
       return (p.baseStats?.speed ?? 50) * Math.sqrt(p.level);
@@ -174,18 +199,51 @@ export function heldItemFitnessAtSlot(itemId: string, slotIndex: number, team: T
     case "focus_band": {
       const bulk = (p.baseStats?.def ?? 50) + (p.baseStats?.spdef ?? p.baseStats?.special ?? 50);
       const offense = Math.max(powerPhysical(p), powerSpecial(p));
-      return offense - bulk * 0.35;
+      return (offense - bulk * 0.35) * Math.max(1, bossMult);
     }
     case "life_orb":
     case "shell_bell":
     case "wide_lens":
     case "scope_lens":
-      return Math.max(powerPhysical(p), powerSpecial(p));
+      return Math.max(powerPhysical(p), powerSpecial(p)) * bossMult;
     case "expert_belt":
-      return Math.max(powerPhysical(p), powerSpecial(p));
+      // Expert Belt only triggers on super-effective hits — its value is
+      // tightly tied to whether the holder actually hits the boss SE.
+      return Math.max(powerPhysical(p), powerSpecial(p)) * (bossMult >= 1.5 ? 1.6 : 0.7);
     default:
       return bst(p) * Math.sqrt(Math.max(1, p.level));
   }
+}
+
+/** Best STAB-vs-boss multiplier this Pokémon could deliver. */
+function nextBossOffenseMultiplier(p: TeamMemberForItem, ctx?: HeldItemFitnessCtx): number {
+  const typings = ctx?.nextBossTypings;
+  if (!typings || typings.length === 0) return 1;
+  const stab = attackingStabTypes(p.types);
+  if (stab.length === 0) return 1;
+  let sum = 0;
+  for (const enemy of typings) {
+    let bestForThis = 0;
+    for (const st of stab) {
+      bestForThis = Math.max(bestForThis, typeEffectiveness(st, enemy));
+    }
+    sum += bestForThis;
+  }
+  const avg = sum / typings.length;
+  // Squash to [0.5, 2.0] so the multiplier can't drown out base power.
+  return Math.max(0.5, Math.min(2.0, avg));
+}
+
+/** Avg type effectiveness of `attackType` against the next boss roster. */
+function nextBossOffenseFromAttackType(attackType: string, ctx?: HeldItemFitnessCtx): number {
+  const typings = ctx?.nextBossTypings;
+  if (!typings || typings.length === 0) return 1;
+  let sum = 0;
+  for (const enemy of typings) {
+    sum += typeEffectiveness(attackType, enemy);
+  }
+  const avg = sum / typings.length;
+  return Math.max(0.4, Math.min(2.0, avg));
 }
 
 function allIndexPermutations(size: number): number[][] {
@@ -214,6 +272,7 @@ const MIN_HELD_PERM_IMPROVE = 6;
  */
 export function optimalHeldItemPermutation(
   team: TeamMemberForItem[],
+  ctx?: HeldItemFitnessCtx,
 ): { slots: number[]; itemIds: string[]; bestPerm: number[]; before: number; after: number; gain: number } | null {
   const slots: number[] = [];
   const itemIds: string[] = [];
@@ -228,7 +287,10 @@ export function optimalHeldItemPermutation(
   if (k < 2) return null;
 
   const scorePerm = (perm: number[]): number =>
-    perm.reduce((sum, srcIdx, slotPos) => sum + heldItemFitnessAtSlot(itemIds[srcIdx]!, slots[slotPos]!, team), 0);
+    perm.reduce(
+      (sum, srcIdx, slotPos) => sum + heldItemFitnessAtSlot(itemIds[srcIdx]!, slots[slotPos]!, team, ctx),
+      0,
+    );
 
   const identity = [...Array(k).keys()];
   const before = scorePerm(identity);
@@ -337,12 +399,16 @@ export function scoreItemPick(itemId: string, team: TeamMemberForItem[]): number
   return score;
 }
 
-export function bestPokemonIndexForHeldItem(itemId: string, team: TeamMemberForItem[]): number {
+export function bestPokemonIndexForHeldItem(
+  itemId: string,
+  team: TeamMemberForItem[],
+  ctx?: HeldItemFitnessCtx,
+): number {
   if (team.length === 0) return 0;
   let bestI = 0;
   let best = -Infinity;
   for (let i = 0; i < team.length; i += 1) {
-    const v = heldItemFitnessAtSlot(itemId, i, team);
+    const v = heldItemFitnessAtSlot(itemId, i, team, ctx);
     if (v > best) {
       best = v;
       bestI = i;
@@ -352,12 +418,16 @@ export function bestPokemonIndexForHeldItem(itemId: string, team: TeamMemberForI
 }
 
 /** Among Pokémon with no held item, best slot for `itemId`; `null` if everyone holds something. */
-export function bestEmptySlotForHeldItem(itemId: string, team: TeamMemberForItem[]): number | null {
+export function bestEmptySlotForHeldItem(
+  itemId: string,
+  team: TeamMemberForItem[],
+  ctx?: HeldItemFitnessCtx,
+): number | null {
   let bestI: number | null = null;
   let best = -Infinity;
   for (let i = 0; i < team.length; i += 1) {
     if (team[i]?.heldItem) continue;
-    const v = heldItemFitnessAtSlot(itemId, i, team);
+    const v = heldItemFitnessAtSlot(itemId, i, team, ctx);
     if (v > best) {
       best = v;
       bestI = i;
