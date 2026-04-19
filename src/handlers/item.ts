@@ -1,57 +1,52 @@
 import type { Page } from "puppeteer";
 
+import { itemNameToId, scoreItemPick, type TeamMemberForItem } from "../item-intel.js";
 import { sleep } from "../page-utils.js";
 
-const ITEM_PRIORITY: Record<string, number> = {
-  lucky_egg: 100,
-  life_orb: 90,
-  choice_band: 85,
-  choice_specs: 85,
-  leftovers: 80,
-  shell_bell: 75,
-  scope_lens: 70,
-  wide_lens: 65,
-  expert_belt: 60,
-  assault_vest: 55,
-  muscle_band: 55,
-  wise_glasses: 55,
-  focus_sash: 50,
-  focus_band: 45,
-  metronome: 45,
-  max_revive: 95,
-  rare_candy: 70,
-  moon_stone: 65,
-  charcoal: 40,
-  mystic_water: 40,
-  thunderbolt: 40,
-  miracle_seed: 40,
-  twisted_spoon: 40,
-  black_belt: 40,
-  dragon_fang: 40,
-  sharp_beak: 35,
-  choice_scarf: 35,
-  eviolite: 35,
-};
-
 export async function handleItem(page: Page): Promise<void> {
-  const picked = await page.evaluate((priority: Record<string, number>): string => {
+  const snapshot = await page.evaluate(() => {
     const cards = Array.from(document.querySelectorAll<HTMLElement>("#item-choices .item-card"));
-    if (cards.length === 0) return "none";
+    const names = cards.map((c) => c.querySelector<HTMLElement>(".item-name")?.textContent?.trim() ?? "");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const st = (window as any).state;
+    const team: TeamMemberForItem[] = (st?.team ?? []).map((p: Record<string, unknown>) => ({
+      types: Array.isArray(p.types) ? (p.types as string[]) : [],
+      baseStats: p.baseStats as TeamMemberForItem["baseStats"],
+      level: Number(p.level ?? 1),
+      speciesId: Number(p.speciesId ?? 0),
+      currentHp: typeof p.currentHp === "number" ? p.currentHp : undefined,
+      maxHp: typeof p.maxHp === "number" ? p.maxHp : undefined,
+      heldItem: p.heldItem as TeamMemberForItem["heldItem"],
+    }));
+    return { names, team };
+  });
 
-    const scored = cards.map((c) => {
-      const name = c.querySelector<HTMLElement>(".item-name")?.textContent?.trim() ?? "";
-      const id = name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-      const score = priority[id] ?? 20;
-      return { c, name, score };
-    });
+  let bestIdx = 0;
+  let bestScore = -Infinity;
+  for (let i = 0; i < snapshot.names.length; i += 1) {
+    const name = snapshot.names[i]!;
+    const id = itemNameToId(name);
+    const s = scoreItemPick(id, snapshot.team);
+    if (s > bestScore) {
+      bestScore = s;
+      bestIdx = i;
+    }
+  }
 
-    scored.sort((a, b) => b.score - a.score);
-    const target = scored[0]?.c;
-    const name = target?.querySelector<HTMLElement>(".item-name")?.textContent?.trim() ?? "item";
-    target?.click();
-    return `${name} (score: ${scored[0]?.score ?? 0})`;
-  }, ITEM_PRIORITY);
+  if (snapshot.names.length === 0) {
+    console.log("  [item] No item cards — skip");
+    await sleep(800);
+    return;
+  }
 
-  console.log(`  [item] Picked: ${picked}`);
+  const pickedName = await page.evaluate((idx: number): string => {
+    const cards = Array.from(document.querySelectorAll<HTMLElement>("#item-choices .item-card"));
+    const c = cards[idx];
+    const name = c?.querySelector<HTMLElement>(".item-name")?.textContent?.trim() ?? "item";
+    c?.click();
+    return name;
+  }, bestIdx);
+
+  console.log(`  [item] Picked: ${pickedName} (score ${bestScore.toFixed(1)})`);
   await sleep(800);
 }

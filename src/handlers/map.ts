@@ -9,6 +9,7 @@ import {
   computeTeamOrder,
 } from "../battle-intel.js";
 import { sleep } from "../page-utils.js";
+import { maybeEquipBagHeldItems, maybeOptimizeHeldItemSwaps } from "./held-item-swaps.js";
 import { dismissTutorial } from "./startup.js";
 
 /** Successful `page.evaluate` snapshot of the map layer (non-empty clickable set). */
@@ -24,6 +25,8 @@ type MapPageOk = {
 
 export async function handleMap(page: Page): Promise<void> {
   await dismissTutorial(page);
+  await maybeEquipBagHeldItems(page);
+  await maybeOptimizeHeldItemSwaps(page);
 
   const snapshot = (await page.evaluate(() => {
     let hpRatio = 1;
