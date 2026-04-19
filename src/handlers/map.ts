@@ -1,5 +1,6 @@
 import type { Page } from "puppeteer";
 
+import { logAction } from "../logger.js";
 import {
   type MapCandidateBrief,
   type TeamMemberBrief,
@@ -86,7 +87,7 @@ export async function handleMap(page: Page): Promise<void> {
       };
 
   if (snapshot.empty || snapshot.candidates.length === 0) {
-    console.log(`  [map] ${"reason" in snapshot ? snapshot.reason : "no candidates"}`);
+    logAction("map", `${"reason" in snapshot ? snapshot.reason : "no candidates"}`);
     await sleep(1500);
     return;
   }
@@ -149,7 +150,7 @@ export async function handleMap(page: Page): Promise<void> {
                   : prep.intel.category === "dynamic_trainer"
                     ? ` (dyn map ${prep.intel.mapIndex})`
                     : "";
-    console.log(`  [map] team order → [${order.join(",")}] for ${prep.intel.category}${detail}`);
+    logAction("map", `team order → [${order.join(",")}] for ${prep.intel.category}${detail}`);
   }
 
   await page.evaluate((pickIndex: number) => {
@@ -162,8 +163,13 @@ export async function handleMap(page: Page): Promise<void> {
 
   const summary = scored.map((r) => `${r.c.surfaceKind}(${r.adjusted.toFixed(1)})`).join(", ");
 
-  console.log(
-    `  [map] hp=${Math.round(snapshot.hpRatio * 100)}% faint=${snapshot.nFainted} crit=${snapshot.nCritical} lowHp=${snapshot.lowHp} map=${snapshot.currentMap} eliteIdx=${snapshot.eliteIndex} | ${summary} → picked ${chosen.surfaceKind} score=${bestScore.toFixed(1)} pWin≈${best.pWin.toFixed(2)}`,
+  logAction(
+    "map",
+    `→ ${chosen.surfaceKind} · score ${bestScore.toFixed(1)} · pWin ${best.pWin.toFixed(2)} · candidates ${summary}`,
+  );
+  logAction(
+    "map",
+    `Team hp ${Math.round(snapshot.hpRatio * 100)}% · faint ${snapshot.nFainted} · crit ${snapshot.nCritical} · lowHp ${snapshot.lowHp} · map ${snapshot.currentMap} · elite ${snapshot.eliteIndex}`,
   );
 
   await sleep(1200);

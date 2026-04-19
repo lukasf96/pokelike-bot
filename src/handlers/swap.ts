@@ -1,6 +1,7 @@
 import type { Page } from "puppeteer";
 
 import type { ReleaseTeamMember } from "../release-candidate-intel.js";
+import { logAction } from "../logger.js";
 import { pickSwapReleaseSlot } from "../release-candidate-intel.js";
 import { readGameState } from "../game-state.js";
 import { sleep } from "../page-utils.js";
@@ -36,8 +37,6 @@ export async function handleSwap(page: Page): Promise<void> {
     return `released slot${releaseIdx} ${name}`;
   }, slot);
 
-  console.log(
-    `  [swap] ${result} (lv${m?.level ?? "?"} speciesId=${m?.speciesId ?? "?"})`,
-  );
+  logAction("swap", `${result} (lv${m?.level ?? "?"} speciesId=${m?.speciesId ?? "?"})`);
   await sleep(800);
 }

@@ -1,6 +1,7 @@
 import type { Page } from "puppeteer";
 
 import { CROSS_SPECIES_EVOLUTION_BST, GEN1_EVOLUTIONS } from "../data/gen1-evolutions.js";
+import { logAction } from "../logger.js";
 import { GEN1_SPECIES_BST } from "../data/gen1-species.js";
 import type { TeamMemberForItem } from "../item-intel.js";
 import { readGameState } from "../game-state.js";
@@ -220,15 +221,15 @@ export async function maybeUseUsableItems(page: Page): Promise<void> {
         document.querySelector<HTMLElement>("#btn-cancel-use")?.click();
       });
       await sleep(200);
-      console.log(`  [usable] UI abort (${next.itemId})`);
+      logAction("usable", `UI abort (${next.itemId})`);
       break;
     }
     used += 1;
-    console.log(`  [usable] ${next.itemId} → slot ${next.slotIdx} (map ${snap.currentMap})`);
+    logAction("usable", `${next.itemId} → slot ${next.slotIdx} (map ${snap.currentMap})`);
     await sleep(520);
   }
 
   if (used > 0) {
-    console.log(`  [usable] consumed ${used} usable item(s)`);
+    logAction("usable", `Consumed ${used} usable item(s)`);
   }
 }

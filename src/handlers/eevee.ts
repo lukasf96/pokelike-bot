@@ -1,6 +1,7 @@
 import type { Page } from "puppeteer";
 
 import { readGameState } from "../game-state.js";
+import { logAction } from "../logger.js";
 import { sleep } from "../page-utils.js";
 
 /** Matches `EEVEE_EVOLUTIONS` render order in game `data.js`. */
@@ -74,6 +75,6 @@ export async function handleEeveeChoice(page: Page): Promise<void> {
     return true;
   }, idx);
 
-  console.log(`  [eevee] chose ${label} (idx=${idx}) map=${ctx.currentMap} clicked=${clicked}`);
+  logAction("eevee", `Chose ${label} (idx=${idx}) map=${ctx.currentMap} clicked=${clicked}`);
   await sleep(600);
 }

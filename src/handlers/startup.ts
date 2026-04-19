@@ -1,5 +1,7 @@
 import type { Page } from "puppeteer";
 
+import { logAction } from "../logger.js";
+
 /** Enable "Auto Skip All Battles" in settings once at startup */
 export async function enableAutoSkip(page: Page): Promise<void> {
   await page.evaluate((): void => {
@@ -17,7 +19,7 @@ export async function enableAutoSkip(page: Page): Promise<void> {
       /* ignore */
     }
   });
-  console.log("  [init] Auto-skip battles enabled in settings");
+  logAction("init", "Auto-skip battles enabled in settings");
 }
 
 export async function dismissTutorial(page: Page): Promise<void> {

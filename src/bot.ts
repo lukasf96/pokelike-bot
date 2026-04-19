@@ -2,6 +2,17 @@ import puppeteer, { type Browser } from "puppeteer";
 
 import { GAME_URL } from "./constants.js";
 import { warnIfUnexpectedGameVersion } from "./game-version.js";
+import {
+  logAction,
+  logError,
+  logGameOverRunBanner,
+  logNavigating,
+  logRunStarted,
+  logScreenPeek,
+  logStartupBanner,
+  logTurnHeader,
+  screenPeekLine,
+} from "./logger.js";
 import { handleBadge } from "./handlers/badge.js";
 import { handleBattle } from "./handlers/battle.js";
 import { handleCatch } from "./handlers/catch.js";
@@ -31,7 +42,7 @@ import {
 } from "./screen-detection.js";
 
 async function runBot(): Promise<void> {
-  console.log("Launching Pokelike bot...\n");
+  logStartupBanner();
 
   const browser: Browser = await puppeteer.launch({
     headless: false,
@@ -44,7 +55,7 @@ async function runBot(): Promise<void> {
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   );
 
-  console.log(`Navigating to ${GAME_URL}...`);
+  logNavigating(GAME_URL);
   // Avoid networkidle2: ongoing requests (e.g. Firebase) stretch cold-start by seconds.
   await page.goto(GAME_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
   await page.waitForSelector("#btn-new-run", { visible: true, timeout: 30000 });
@@ -58,7 +69,7 @@ async function runBot(): Promise<void> {
   let lastScreen = "";
   let prevScreen = "";
 
-  console.log(`Bot started — Run #${run}. Press Ctrl+C to stop.\n`);
+  logRunStarted(run);
 
   while (true) {
     turn++;
@@ -80,9 +91,7 @@ async function runBot(): Promise<void> {
       turn = 1;
       updateRunSession(run, turn);
       clearSnapshot();
-      console.log(`\n${"=".repeat(50)}`);
-      console.log(`GAME OVER — Starting Run #${run}`);
-      console.log(`${"=".repeat(50)}\n`);
+      logGameOverRunBanner(run);
     }
 
     if (!["title-screen", "trainer-screen", "starter-screen", "unknown"].includes(screen)) {
@@ -111,8 +120,9 @@ async function runBot(): Promise<void> {
       } catch {
         /* ignore */
       }
-      console.log(`\n[run ${run} | turn ${turn}] ${effectiveScreen}`);
-      if (text) console.log(`  ${text}`);
+      logTurnHeader(run, turn, effectiveScreen);
+      const peek = screenPeekLine(effectiveScreen, text);
+      if (peek) logScreenPeek(peek);
       lastScreen = effectiveScreen;
     }
 
@@ -189,7 +199,7 @@ async function runBot(): Promise<void> {
           default:
             stuckCount++;
             if (stuckCount % 3 === 0) {
-              console.log(`  [stuck ${stuckCount}] Trying any visible button...`);
+              logAction("stuck", `Trying any visible button… (×${stuckCount})`);
               await clickFirst(page, ".screen.active button, .screen.active [role='button']");
               await humanDelay(500, 1000);
             } else {
@@ -198,7 +208,7 @@ async function runBot(): Promise<void> {
         }
       }
     } catch (err) {
-      console.log(`  [error] ${String(err).slice(0, 120)}`);
+      logAction("error", String(err).slice(0, 120));
       await sleep(500);
     }
 
@@ -207,6 +217,6 @@ async function runBot(): Promise<void> {
 }
 
 runBot().catch((err) => {
-  console.error("Fatal crash:", err);
+  logError(`Fatal crash: ${String(err)}`);
   process.exit(1);
 });

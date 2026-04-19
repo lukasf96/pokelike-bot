@@ -1,5 +1,6 @@
 import type { Page } from "puppeteer";
 
+import { logAction } from "../logger.js";
 import {
   heldItemFitnessAtSlot,
   optimalHeldItemPermutation,
@@ -113,7 +114,7 @@ export async function maybeOptimizeHeldItemSwaps(page: Page): Promise<void> {
 
     const ok = await performOneHeldSwap(page, slots[t]!, slots[u]!);
     if (!ok) {
-      console.log(`  [held-swaps] aborted (UI) after ${steps} swap(s)`);
+      logAction("held-swaps", `Aborted (UI) after ${steps} swap(s)`);
       return;
     }
 
@@ -122,7 +123,10 @@ export async function maybeOptimizeHeldItemSwaps(page: Page): Promise<void> {
   }
 
   if (steps > 0) {
-    console.log(`  [held-swaps] fitness ${before.toFixed(0)} → ${after.toFixed(0)} (+${gain.toFixed(0)}, ${steps} swap(s))`);
+    logAction(
+      "held-swaps",
+      `Fitness ${before.toFixed(0)} → ${after.toFixed(0)} (+${gain.toFixed(0)}, ${steps} swap(s))`,
+    );
   }
 }
 
@@ -183,13 +187,13 @@ export async function maybeEquipBagHeldItems(page: Page): Promise<void> {
 
     const ok = await equipBagHeldItemOntoSlot(page, bagIdx, slotIdx);
     if (!ok) {
-      console.log(`  [held-bag] UI failed (bag idx ${bagIdx} → slot ${slotIdx})`);
+      logAction("held-bag", `UI failed (bag idx ${bagIdx} → slot ${slotIdx})`);
       break;
     }
     moves += 1;
   }
 
   if (moves > 0) {
-    console.log(`  [held-bag] equipped ${moves} held item(s) from bag`);
+    logAction("held-bag", `Equipped ${moves} held item(s) from bag`);
   }
 }

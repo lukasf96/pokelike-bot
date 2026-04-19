@@ -1,6 +1,7 @@
 import type { Page } from "puppeteer";
 
 import type { ReleaseTeamMember } from "../release-candidate-intel.js";
+import { logAction } from "../logger.js";
 import {
   isHardProtectedRelease,
   tradeAdjustedGainForSlot,
@@ -48,16 +49,18 @@ export async function handleTrade(page: Page): Promise<void> {
   }
 
   if (bestIdx >= 0 && bestGain >= MIN_TRADE_ADJUSTED_GAIN) {
-    console.log(
-      `  [trade] Accepting slot ${bestIdx} (adjusted gain ~${bestGain.toFixed(0)} ≥ ${MIN_TRADE_ADJUSTED_GAIN})`,
+    logAction(
+      "trade",
+      `Accepting slot ${bestIdx} (adjusted gain ~${bestGain.toFixed(0)} ≥ ${MIN_TRADE_ADJUSTED_GAIN})`,
     );
     await page.evaluate((idx: number) => {
       const rows = document.querySelectorAll<HTMLElement>("#trade-team-list .trade-member-row");
       rows[idx]?.click();
     }, bestIdx);
   } else {
-    console.log(
-      `  [trade] Skipping (best adjusted gain ${bestGain === -Infinity ? "n/a" : bestGain.toFixed(0)} < ${MIN_TRADE_ADJUSTED_GAIN} or no eligible slot)`,
+    logAction(
+      "trade",
+      `Skipping (best adjusted gain ${bestGain === -Infinity ? "n/a" : bestGain.toFixed(0)} < ${MIN_TRADE_ADJUSTED_GAIN} or no eligible slot)`,
     );
     await clickSel(page, "#btn-skip-trade");
   }

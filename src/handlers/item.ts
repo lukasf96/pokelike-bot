@@ -2,6 +2,7 @@ import type { Page } from "puppeteer";
 
 import { itemNameToId, scoreItemPick, type TeamMemberForItem } from "../item-intel.js";
 import { readGameState } from "../game-state.js";
+import { logAction } from "../logger.js";
 import { sleep } from "../page-utils.js";
 
 export async function handleItem(page: Page): Promise<void> {
@@ -36,7 +37,7 @@ export async function handleItem(page: Page): Promise<void> {
   }
 
   if (snapshot.names.length === 0) {
-    console.log("  [item] No item cards — skip");
+    logAction("item", "No item cards — skip");
     await sleep(800);
     return;
   }
@@ -49,6 +50,6 @@ export async function handleItem(page: Page): Promise<void> {
     return name;
   }, bestIdx);
 
-  console.log(`  [item] Picked: ${pickedName} (score ${bestScore.toFixed(1)})`);
+  logAction("item", `Picked: ${pickedName} (score ${bestScore.toFixed(1)})`);
   await sleep(800);
 }

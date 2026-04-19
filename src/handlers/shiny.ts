@@ -1,6 +1,7 @@
 import type { Page } from "puppeteer";
 
 import { GEN1_SPECIES_BST } from "../data/gen1-species.js";
+import { logAction } from "../logger.js";
 import { readGameState } from "../game-state.js";
 import { clickSel, sleep } from "../page-utils.js";
 
@@ -61,20 +62,21 @@ async function handleShiny(page: Page): Promise<void> {
   if (take) {
     const took = await clickSel(page, "#btn-take-shiny");
     if (took) {
-      console.log("  [shiny] Took shiny!");
+      logAction("shiny", "Took shiny!");
     } else {
       await clickSel(page, "#btn-skip-shiny");
-      console.log("  [shiny] Skipped shiny (take button missing)");
+      logAction("shiny", "Skipped shiny (take button missing)");
     }
   } else {
     const skipped = await clickSel(page, "#btn-skip-shiny");
     if (skipped) {
-      console.log(
-        `  [shiny] Skipped weak shiny (species ${snapshot.shinySpeciesId} Lv${snapshot.shinyLevel} vs team)`,
+      logAction(
+        "shiny",
+        `Skipped weak shiny (species ${snapshot.shinySpeciesId} Lv${snapshot.shinyLevel} vs team)`,
       );
     } else {
       await clickSel(page, "#btn-take-shiny");
-      console.log("  [shiny] Took shiny (skip button missing)");
+      logAction("shiny", "Took shiny (skip button missing)");
     }
   }
 
@@ -87,7 +89,7 @@ export async function handleShinyExtended(page: Page): Promise<void> {
   if (!tradeContinue) {
     await handleShiny(page);
   } else {
-    console.log("  [shiny] Trade reveal — continuing");
+    logAction("shiny", "Trade reveal — continuing");
   }
   await sleep(800);
 }

@@ -1,5 +1,6 @@
 import type { Page } from "puppeteer";
 
+import { logAction } from "../logger.js";
 import { isBattleDefeatContinueButton, logRunEnd } from "../run-log.js";
 import { clickSel, sleep } from "../page-utils.js";
 
@@ -10,7 +11,7 @@ export async function handleBattle(page: Page): Promise<void> {
   });
 
   if (skipVisible) {
-    console.log("  [battle] Clicking Skip");
+    logAction("battle", "Clicking Skip");
     await clickSel(page, "#btn-auto-battle");
     await page
       .waitForFunction((): boolean => {
@@ -28,10 +29,10 @@ export async function handleBattle(page: Page): Promise<void> {
 
   if (continueVisible) {
     if (await isBattleDefeatContinueButton(page)) {
-      console.log("  [battle] Run lost — logging, then Continue...");
+      logAction("battle", "Run lost — logging, then Continue…");
       await logRunEnd(page, "lost");
     }
-    console.log("  [battle] Clicking Continue");
+    logAction("battle", "Clicking Continue");
     await clickSel(page, "#btn-continue-battle");
     await sleep(800);
   }

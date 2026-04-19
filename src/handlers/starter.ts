@@ -1,5 +1,6 @@
 import type { Page } from "puppeteer";
 
+import { logAction } from "../logger.js";
 import { sleep } from "../page-utils.js";
 
 export async function handleStarter(page: Page): Promise<void> {
@@ -41,9 +42,9 @@ export async function handleStarter(page: Page): Promise<void> {
       return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
     });
     if (bounds) await page.mouse.click(bounds.x, bounds.y);
-    console.log("  [starter] Picked (mouse fallback)");
+    logAction("starter", "Picked (mouse fallback)");
   } else {
-    console.log(`  [starter] Picked: ${picked}`);
+    logAction("starter", `Picked: ${picked}`);
   }
   await sleep(800);
 }

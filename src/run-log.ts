@@ -3,6 +3,8 @@ import path from "node:path";
 
 import type { Page } from "puppeteer";
 
+import { logAction, logError } from "./logger.js";
+
 export interface RunLogTeamMember {
   speciesId: number;
   name: string;
@@ -179,10 +181,10 @@ function appendRunLog(entry: RunLogEntry): void {
     fs.appendFileSync(file, `${JSON.stringify(entry)}\n`, { encoding: "utf8" });
     if (!loggedPathTip) {
       loggedPathTip = true;
-      console.log(`  [run-log] Logging to ${file}`);
+      logAction("run-log", `Logging to ${file}`);
     }
   } catch (e) {
-    console.error("  [run-log] Failed to write:", e);
+    logError(`[run-log] Failed to write: ${String(e)}`);
   }
 }
 

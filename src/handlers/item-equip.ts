@@ -1,5 +1,6 @@
 import type { Page } from "puppeteer";
 
+import { logAction } from "../logger.js";
 import {
   bestEmptySlotForHeldItem,
   bestPokemonIndexForHeldItem,
@@ -24,7 +25,7 @@ export async function handleItemEquip(page: Page): Promise<void> {
   ]);
 
   if (!modalSnap) {
-    console.log("  [item-equip] no-modal");
+    logAction("item-equip", "no-modal");
     await sleep(600);
     return;
   }
@@ -68,6 +69,6 @@ export async function handleItemEquip(page: Page): Promise<void> {
     { equipIdx },
   );
 
-  console.log(`  [item-equip] ${result} (${ctx.itemName} → ${itemId})`);
+  logAction("item-equip", `${result} (${ctx.itemName} → ${itemId})`);
   await sleep(600);
 }

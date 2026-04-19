@@ -1,6 +1,7 @@
 import type { Page } from "puppeteer";
 
 import { EXPECTED_POKELIKE_GAME_VERSION } from "./constants.js";
+import { logWarn } from "./logger.js";
 import { activeScreen, screenText } from "./screen-detection.js";
 
 /** Extract semver from title screen copy such as "POKELIKE Pokemon Roguelike v1.3.1". */
@@ -16,7 +17,7 @@ export async function warnIfUnexpectedGameVersion(page: Page): Promise<void> {
   try {
     const screen = await activeScreen(page);
     if (screen !== "title-screen") {
-      console.warn(
+      logWarn(
         `[pokelike-bot] Could not verify game version (expected title screen, got "${screen}"). ` +
           `This bot is maintained for Pokelike v${EXPECTED_POKELIKE_GAME_VERSION}.`,
       );
@@ -25,7 +26,7 @@ export async function warnIfUnexpectedGameVersion(page: Page): Promise<void> {
     const text = await screenText(page);
     const detected = parseGameVersionFromTitleText(text);
     if (!detected) {
-      console.warn(
+      logWarn(
         `[pokelike-bot] Could not read game version from the title screen. ` +
           `This bot targets v${EXPECTED_POKELIKE_GAME_VERSION}; if the game updated, check for breaking changes ` +
           `(changelog, UI selectors) and update EXPECTED_POKELIKE_GAME_VERSION in src/constants.ts after testing.`,
@@ -33,13 +34,13 @@ export async function warnIfUnexpectedGameVersion(page: Page): Promise<void> {
       return;
     }
     if (detected !== EXPECTED_POKELIKE_GAME_VERSION) {
-      console.warn(
+      logWarn(
         `[pokelike-bot] Game version mismatch: title screen shows v${detected}, bot is built for v${EXPECTED_POKELIKE_GAME_VERSION}. ` +
           `Automation may break — review for breaking changes before relying on this run.`,
       );
     }
   } catch (err) {
-    console.warn(
+    logWarn(
       `[pokelike-bot] Could not verify game version (${String(err)}). ` +
         `Maintained for Pokelike v${EXPECTED_POKELIKE_GAME_VERSION}.`,
     );

@@ -1,6 +1,7 @@
 import type { Page } from "puppeteer";
 
 import { readGameState } from "../game-state.js";
+import { logAction } from "../logger.js";
 import { sleep } from "../page-utils.js";
 import { scoreCatchCandidate } from "../catch-intel.js";
 
@@ -38,7 +39,7 @@ export async function handleCatch(page: Page): Promise<void> {
   const mapIndex = gs.currentMap;
 
   if (options.length === 0) {
-    console.log("  [catch] No catch options found");
+    logAction("catch", "No catch options found");
     return;
   }
 
@@ -52,8 +53,9 @@ export async function handleCatch(page: Page): Promise<void> {
   scored.sort((a, b) => b.score - a.score);
   const best = scored[0]!;
 
-  console.log(
-    `  [catch] Scored: ${scored.map((s) => `${s.opt.name}(${s.score.toFixed(0)})`).join(", ")} → picking ${best.opt.name}`,
+  logAction(
+    "catch",
+    `Scored: ${scored.map((s) => `${s.opt.name}(${s.score.toFixed(0)})`).join(", ")} → picking ${best.opt.name}`,
   );
 
   await page.evaluate((idx: number) => {

@@ -1,5 +1,6 @@
 import type { Page } from "puppeteer";
 
+import { logAction } from "../logger.js";
 import { sleep } from "../page-utils.js";
 import { pickTutorSlot, type TutorTeamSlot } from "../tutor-intel.js";
 
@@ -42,6 +43,6 @@ export async function handleMoveTutor(page: Page): Promise<void> {
     return `upgraded slot ${idx} to: ${move}`;
   }, chosenIdx);
 
-  console.log(`  [tutor] ${result}`);
+  logAction("tutor", result);
   await sleep(600);
 }
