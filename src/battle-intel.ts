@@ -113,7 +113,7 @@ function poolSpeciesTypes(ids: number[]): string[][] {
   return ids.map((id) => typesForSpeciesId(id));
 }
 
-function eligibleTrainerSpeciesIds(key: string, currentMap: number): number[] {
+export function eligibleTrainerSpeciesIds(key: string, currentMap: number): number[] {
   const raw = TRAINER_SPECIES_POOL.get(key);
   if (!raw || raw.length === 0) return [];
   const maxL = maxLevelForMap(currentMap);

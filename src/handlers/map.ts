@@ -3,11 +3,13 @@ import type { Page } from "puppeteer";
 import {
   type MapCandidateBrief,
   type TeamMemberBrief,
+  inferNodeIntel,
   pickBattlePrepIntel,
   scoreCandidate,
   shouldReorderForBattle,
   computeTeamOrder,
 } from "../battle-intel.js";
+import { adjustMapScoreWithWinProbability, estimateBattleWinProbability } from "../sim/win-probability.js";
 import { sleep } from "../page-utils.js";
 import { maybeEquipBagHeldItems, maybeOptimizeHeldItemSwaps } from "./held-item-swaps.js";
 import { maybeUseUsableItems } from "./usable-item.js";
@@ -21,6 +23,9 @@ type MapPageOk = {
   currentMap: number;
   eliteIndex: number;
   team: TeamMemberBrief[];
+  /** Raw team for battle simulation (base stats, HP, items). */
+  teamRaw: unknown[];
+  bagItemIds: string[];
   candidates: Array<{ href: string; surfaceKind: string; idx: number }>;
 };
 
@@ -48,9 +53,13 @@ export async function handleMap(page: Page): Promise<void> {
     const st = (window as any).state;
     const currentMap = Number(st?.currentMap ?? 0);
     const eliteIndex = Number(st?.eliteIndex ?? 0);
-    const team: TeamMemberBrief[] = (st?.team ?? []).map((p: { types?: string[] }) => ({
+    const teamRaw = st?.team ?? [];
+    const team: TeamMemberBrief[] = (teamRaw as Array<{ types?: string[] }>).map((p) => ({
       types: p.types ?? [],
     }));
+    const bagItemIds = ((st?.items ?? []) as Array<{ id?: string }>)
+      .map((it) => String(it?.id ?? ""))
+      .filter(Boolean);
 
     const clickable = Array.from(document.querySelectorAll<SVGGElement>("#map-container g")).filter((g) =>
       (g.getAttribute("style") ?? "").includes("cursor: pointer"),
@@ -90,6 +99,8 @@ export async function handleMap(page: Page): Promise<void> {
       currentMap,
       eliteIndex,
       team,
+      teamRaw,
+      bagItemIds,
       candidates: candidates.map(({ idx, href, surfaceKind }) => ({ idx, href, surfaceKind })),
     };
   })) as MapPageOk | { empty: true; reason: string };
@@ -102,19 +113,26 @@ export async function handleMap(page: Page): Promise<void> {
 
   const context = { currentMap: snapshot.currentMap, eliteIndex: snapshot.eliteIndex };
 
+  const scored = snapshot.candidates.map((c) => {
+    const cand: MapCandidateBrief = { href: c.href, surfaceKind: c.surfaceKind };
+    const intel = inferNodeIntel(cand.href, context);
+    const baseScore = scoreCandidate(snapshot.lowHp, cand, snapshot.team, context);
+    const pWin = estimateBattleWinProbability(intel, snapshot.teamRaw, snapshot.bagItemIds, context);
+    const adjusted = adjustMapScoreWithWinProbability(baseScore, intel, snapshot.lowHp, pWin);
+    return { c, pWin, adjusted };
+  });
+
   let bestIdx = 0;
   let bestScore = -Infinity;
-  for (let i = 0; i < snapshot.candidates.length; i++) {
-    const c = snapshot.candidates[i]!;
-    const cand: MapCandidateBrief = { href: c.href, surfaceKind: c.surfaceKind };
-    const s = scoreCandidate(snapshot.lowHp, cand, snapshot.team, context);
-    if (s > bestScore) {
-      bestScore = s;
+  for (let i = 0; i < scored.length; i++) {
+    if (scored[i]!.adjusted > bestScore) {
+      bestScore = scored[i]!.adjusted;
       bestIdx = i;
     }
   }
 
   const chosen = snapshot.candidates[bestIdx]!;
+  const best = scored[bestIdx]!;
   const prep = pickBattlePrepIntel(
     { href: chosen.href, surfaceKind: chosen.surfaceKind },
     context,
@@ -162,16 +180,10 @@ export async function handleMap(page: Page): Promise<void> {
     best?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
   }, bestIdx);
 
-  const summary = snapshot.candidates
-    .map((c, i) => {
-      const cand: MapCandidateBrief = { href: c.href, surfaceKind: c.surfaceKind };
-      const sc = scoreCandidate(snapshot.lowHp, cand, snapshot.team, context);
-      return `${c.surfaceKind}(${sc.toFixed(1)})`;
-    })
-    .join(", ");
+  const summary = scored.map((r) => `${r.c.surfaceKind}(${r.adjusted.toFixed(1)})`).join(", ");
 
   console.log(
-    `  [map] hp=${Math.round(snapshot.hpRatio * 100)}% lowHp=${snapshot.lowHp} map=${snapshot.currentMap} eliteIdx=${snapshot.eliteIndex} | ${summary} → picked ${chosen.surfaceKind} score=${bestScore.toFixed(1)}`,
+    `  [map] hp=${Math.round(snapshot.hpRatio * 100)}% lowHp=${snapshot.lowHp} map=${snapshot.currentMap} eliteIdx=${snapshot.eliteIndex} | ${summary} → picked ${chosen.surfaceKind} score=${bestScore.toFixed(1)} pWin≈${best.pWin.toFixed(2)}`,
   );
 
   await sleep(1200);

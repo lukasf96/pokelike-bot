@@ -58,6 +58,11 @@ const MAP_LEVEL_RANGES: readonly [number, number][] = [
   [53, 64],
 ];
 
+/** Inclusive [min, max] level band for the current map (data.js MAP_LEVEL_RANGES). */
+export function getMapLevelRange(mapIndex: number): [number, number] {
+  return MAP_LEVEL_RANGES[Math.min(mapIndex, MAP_LEVEL_RANGES.length - 1)]!;
+}
+
 export function catchBucketIdsForMap(mapIndex: number): number[] {
   const range = MAP_BST_RANGES[Math.min(mapIndex, MAP_BST_RANGES.length - 1)]!;
   let bucket: readonly number[];

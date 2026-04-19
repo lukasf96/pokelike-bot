@@ -10,6 +10,7 @@
     "build": "tsc",
     "dev": "tsx watch src/bot.ts",
     "gen:species": "node scripts/fetch-gen1-species.mjs",
+    "gen:base-stats": "node scripts/fetch-gen1-base-stats.mjs",
     "gen:typechart": "node scripts/fetch-type-chart.mjs",
     "gen:pokeapi-data": "node scripts/fetch-gen1-species.mjs && node scripts/fetch-type-chart.mjs"
   },
