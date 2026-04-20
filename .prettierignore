@@ -1,0 +1,5 @@
+dist
+logs
+node_modules
+pokelike-source-files
+pnpm-lock.yaml
