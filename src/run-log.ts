@@ -86,6 +86,42 @@ function teamHpRatio(team: Pokemon[]): number | null {
   return mx > 0 ? tot / mx : null;
 }
 
+// Name → in-loop index fallback when subtitle parsing fails. `doElite4()` in
+// game.js advances in this order and only Gary carries the "Champion" title.
+const ELITE_NAME_TO_INDEX: Record<string, number> = {
+  lorelei: 0,
+  bruno: 1,
+  agatha: 2,
+  lance: 3,
+  gary: 4,
+};
+
+/**
+ * True eliteIndex of the currently-showing Elite/Champion battle.
+ *
+ * `state.eliteIndex` in localStorage is stale during Elite Four: game.js sets
+ * it inside the `doElite4()` loop without calling `saveRun()`, so the bot only
+ * ever observes the value saved when the player first entered Map 8 (i.e. 0).
+ * The battle subtitle ("Elite Four - Battle 3/4" / "Final Battle!") and the
+ * boss name are the only live signals we have at defeat time.
+ */
+function deriveEliteIndex(
+  title: string,
+  subtitle: string,
+  fallback: number,
+): number {
+  const battleN = subtitle.match(/Battle\s+(\d+)\s*\/\s*4/i);
+  if (battleN) return Math.max(0, Number(battleN[1]) - 1);
+  if (/Final Battle/i.test(subtitle) || /^Champion:/i.test(title)) return 4;
+
+  const elite = title.match(/^(?:.+?):\s+(.+?)!$/);
+  const name = elite?.[1]?.trim().toLowerCase();
+  if (name && Object.prototype.hasOwnProperty.call(ELITE_NAME_TO_INDEX, name)) {
+    return ELITE_NAME_TO_INDEX[name]!;
+  }
+  return fallback;
+}
+
 function parseDefeatContext(
   title: string,
   subtitle: string,
@@ -93,7 +129,6 @@ function parseDefeatContext(
 ): DefeatContext | null {
   if (!title) return null;
   const mapIndex = game?.currentMap ?? -1;
-  const eliteIdx = game?.eliteIndex ?? -1;
 
   const wild = title.match(/^Wild\s+(.+?)\s+appeared!$/i);
   if (wild) {
@@ -119,7 +154,7 @@ function parseDefeatContext(
       kind: "elite",
       title: eliteMatch[1]!,
       name: eliteMatch[2]!,
-      eliteIndex: eliteIdx,
+      eliteIndex: deriveEliteIndex(title, subtitle, game?.eliteIndex ?? 0),
     };
   }
 
@@ -151,6 +186,14 @@ export function handleRunLogEvent(event: RunEvent, tick: Tick, currentTurn: numb
 
   const team = lastGame ? toLogTeam(lastGame.team) : [];
 
+  // Prefer the parsed elite index over the stale localStorage value — see
+  // deriveEliteIndex above. Only elite-kind defeats carry a trustworthy index;
+  // everything else keeps reporting the (correct) map-level value.
+  const eliteIndex =
+    defeatContext?.kind === "elite"
+      ? defeatContext.eliteIndex
+      : lastGame?.eliteIndex ?? null;
+
   appendRunLog({
     timestamp: new Date().toISOString(),
     outcome: event.outcome,
@@ -158,7 +201,7 @@ export function handleRunLogEvent(event: RunEvent, tick: Tick, currentTurn: numb
     botTurn: currentTurn,
     badges: lastGame?.badges ?? null,
     defeatContext,
-    eliteIndex: lastGame?.eliteIndex ?? null,
+    eliteIndex,
     teamHpRatio: lastGame ? teamHpRatio(lastGame.team) : null,
     team,
   });

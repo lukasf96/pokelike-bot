@@ -256,8 +256,20 @@ export async function observe(page: Page, tickId: number, deps: ObserveDeps = {}
         const levelEl = c.querySelector<HTMLElement>(".poke-level, [class*='level']");
         const levelText = levelEl?.textContent?.replace(/[^0-9]/g, "") ?? "";
         const level = levelText ? parseInt(levelText, 10) : 5;
+        // renderPokemonCard() exposes no data-id attribute, but every card
+        // carries a sprite whose URL encodes the Pokédex id:
+        //   .../sprites/pokemon/<id>.png   (normal)
+        //   .../sprites/pokemon/shiny/<id>.png (shiny)
+        // Without this, speciesId was always 0 and handlers/catch.ts skipped
+        // scoring entirely — the bot just picked whichever option came first.
         const speciesIdAttr = c.getAttribute("data-species-id") ?? c.getAttribute("data-id") ?? "";
-        const speciesId = speciesIdAttr ? parseInt(speciesIdAttr, 10) : 0;
+        let speciesId = speciesIdAttr ? parseInt(speciesIdAttr, 10) : 0;
+        if (!speciesId) {
+          const img = c.querySelector<HTMLImageElement>("img.poke-sprite, img[src*='/sprites/pokemon/']");
+          const src = img?.getAttribute("src") ?? "";
+          const m = src.match(/\/sprites\/pokemon\/(?:shiny\/)?(\d+)\.png/i);
+          if (m) speciesId = Number(m[1]);
+        }
         const isShiny =
           c.querySelector(".shiny-badge, [class*='shiny']") !== null ||
           (c.textContent?.includes("★") ?? false) ||
