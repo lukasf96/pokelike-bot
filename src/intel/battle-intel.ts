@@ -200,11 +200,15 @@ function poolSpeciesTypes(ids: number[]): string[][] {
 }
 
 export function eligibleTrainerSpeciesIds(key: string, currentMap: number): number[] {
+  const maxL = maxLevelForMap(currentMap);
+  return eligibleTrainerSpeciesIdsForLevel(key, maxL);
+}
+
+export function eligibleTrainerSpeciesIdsForLevel(key: string, levelCap: number): number[] {
   const raw = TRAINER_SPECIES_POOL.get(key);
   if (!raw || raw.length === 0) return [];
-  const maxL = maxLevelForMap(currentMap);
   const uniq = [...new Set(raw)];
-  const eligible = uniq.filter((id) => minLevelForSpecies(id) <= maxL);
+  const eligible = uniq.filter((id) => minLevelForSpecies(id) <= levelCap);
   return eligible.length > 0 ? eligible : uniq;
 }
 

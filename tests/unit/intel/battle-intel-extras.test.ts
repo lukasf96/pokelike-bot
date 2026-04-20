@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   avgEnemyPressureVsTeam,
   eligibleTrainerSpeciesIds,
+  eligibleTrainerSpeciesIdsForLevel,
   enemyTypingsForIntel,
   expectedQuestionMarkSurfaceBase,
   leadTypingsPoolForIntel,
@@ -37,6 +38,20 @@ describe("eligibleTrainerSpeciesIds", () => {
       late.length >= early.length,
       `late pool (${late.length}) should include early pool (${early.length})`,
     );
+  });
+});
+
+describe("eligibleTrainerSpeciesIdsForLevel", () => {
+  it("filters using an explicit node-level cap (matches game trainer roll)", () => {
+    // Fisher has evolutions like Gyarados (min 20) that should not appear at low levels.
+    const lowLevel = eligibleTrainerSpeciesIdsForLevel("fisher", 5);
+    const higherLevel = eligibleTrainerSpeciesIdsForLevel("fisher", 20);
+    assert.ok(
+      higherLevel.length >= lowLevel.length,
+      `higher level pool (${higherLevel.length}) should include low-level pool (${lowLevel.length})`,
+    );
+    assert.ok(!lowLevel.includes(130), "Gyarados should be ineligible at level 5");
+    assert.ok(higherLevel.includes(130), "Gyarados should be eligible by level 20");
   });
 });
 
