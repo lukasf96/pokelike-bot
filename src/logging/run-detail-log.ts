@@ -10,9 +10,9 @@
  *     `subscribeToActions` hook in logger.ts — no coupling required.
  *
  * Filename format:
- *   logs/runs/run-<RRRR>-<YYYYMMDDTHHMMSS>.json
- *   where RRRR is zero-padded run number and the timestamp is the run-start
- *   wall-clock UTC. Guarantees uniqueness across processes.
+ *   logs/runs/run-<YYYYMMDDTHHMMSS>-<RRRR>.json
+ *   where the timestamp is the run-start wall-clock UTC and RRRR is the
+ *   zero-padded run number. Guarantees uniqueness across processes.
  *
  * Override directory with POKELIKE_RUN_DETAIL_DIR.
  */
@@ -155,7 +155,7 @@ export function endRunDetail(meta: {
   // 20260419T193512 — sortable, filesystem-safe, second precision is enough
   // since we always also include the run number in the prefix.
   const tsCompact = current.startedAt.replace(/[-:]/g, "").split(".")[0]!;
-  const filename = `run-${padded}-${tsCompact}.json`;
+  const filename = `run-${tsCompact}-${padded}.json`;
   const out = path.join(logDir(), filename);
 
   try {
