@@ -17,11 +17,7 @@ import {
 } from "../intel/battle-intel.js";
 import { BOSS_TYPES_BY_MAP } from "../intel/catch-intel.js";
 import { logAction } from "../logging/logger.js";
-import {
-  getCurrentRunNumber,
-  getCurrentTurn,
-  recordDecision,
-} from "../logging/run-detail-log.js";
+import { getCurrentRunNumber, getCurrentTurn, recordDecision } from "../logging/run-detail-log.js";
 import { setPendingBattle } from "../logging/battle-outcome-log.js";
 import {
   adjustMapScoreWithWinProbability,

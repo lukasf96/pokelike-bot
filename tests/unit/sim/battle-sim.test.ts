@@ -199,7 +199,12 @@ describe("getEffectiveStat", () => {
     // all-physical player team boosts the enemy's atk; an all-special
     // player team does not.
     const boosted = getEffectiveStat(enemy, "atk", [{ id: "muscle_band" }], allPhysicalPlayerTeam);
-    const notBoosted = getEffectiveStat(enemy, "atk", [{ id: "muscle_band" }], allSpecialPlayerTeam);
+    const notBoosted = getEffectiveStat(
+      enemy,
+      "atk",
+      [{ id: "muscle_band" }],
+      allSpecialPlayerTeam,
+    );
 
     assert.ok(
       boosted > notBoosted,

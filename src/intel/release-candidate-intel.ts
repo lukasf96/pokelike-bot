@@ -120,10 +120,7 @@ export function redundancyReleaseBias(
  * team stays equally vulnerable). Diagnostic from 32-run batch: 5 losses were
  * 4× Grass/Poison teams swept by Erika / Blaine STAB.
  */
-export function sharedWeaknessReleaseBias(
-  team: ReleaseTeamMember[],
-  slotIndex: number,
-): number {
+export function sharedWeaknessReleaseBias(team: ReleaseTeamMember[], slotIndex: number): number {
   const typesFor = (id: number): string[] => GEN1_SPECIES_TYPES[id] ?? ["Normal"];
   const briefs: TeamMemberBrief[] = team.map((m) => ({ types: typesFor(m.speciesId) }));
   const before = sharedWeaknessTypes(briefs);

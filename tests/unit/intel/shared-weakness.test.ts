@@ -81,7 +81,10 @@ describe("scoreCandidate with bossSharedWeakness", () => {
       team,
       ctxSafe,
     );
-    assert.ok(withShared < withoutShared, `shared-weakness path (${withShared}) should be lower than safe (${withoutShared})`);
+    assert.ok(
+      withShared < withoutShared,
+      `shared-weakness path (${withShared}) should be lower than safe (${withoutShared})`,
+    );
   });
 
   it("bumps PC base when boss-imminent + shared weakness at full HP", () => {
@@ -93,12 +96,7 @@ describe("scoreCandidate with bossSharedWeakness", () => {
       team,
       ctxShared,
     );
-    const pcSafe = scoreCandidate(
-      false,
-      { href: "#pc", surfaceKind: "pokecenter" },
-      team,
-      ctxSafe,
-    );
+    const pcSafe = scoreCandidate(false, { href: "#pc", surfaceKind: "pokecenter" }, team, ctxSafe);
     assert.ok(pcShared > pcSafe, `PC bonus expected: ${pcShared} > ${pcSafe}`);
   });
 });

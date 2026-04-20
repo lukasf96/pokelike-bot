@@ -125,6 +125,10 @@ describe("F-010 contract — species types are all known to the game's TYPE_CHAR
     for (const [sidStr, types] of Object.entries(GEN1_SPECIES_TYPES)) {
       if (types.some((t) => t.toLowerCase() === "fairy")) withFairy.push(Number(sidStr));
     }
-    assert.deepEqual(withFairy, [], `Fairy leaked back into species types: ${withFairy.join(", ")}`);
+    assert.deepEqual(
+      withFairy,
+      [],
+      `Fairy leaked back into species types: ${withFairy.join(", ")}`,
+    );
   });
 });

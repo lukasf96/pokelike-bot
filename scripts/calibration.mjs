@@ -24,8 +24,9 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const LOG_PATH = process.env.POKELIKE_BATTLE_OUTCOME_LOG
-  ?? path.join(process.cwd(), "logs", "battle-outcomes.jsonl");
+const LOG_PATH =
+  process.env.POKELIKE_BATTLE_OUTCOME_LOG ??
+  path.join(process.cwd(), "logs", "battle-outcomes.jsonl");
 
 function parseArgs() {
   const out = {};
@@ -90,7 +91,9 @@ function summarize(rows, label) {
   }
   const actual = totalWins / total;
   const mean = sumP / total;
-  console.log(`\n${label}  (n=${total}, mean pWin=${mean.toFixed(3)}, actual=${actual.toFixed(3)}, gap=${(mean - actual).toFixed(3)})`);
+  console.log(
+    `\n${label}  (n=${total}, mean pWin=${mean.toFixed(3)}, actual=${actual.toFixed(3)}, gap=${(mean - actual).toFixed(3)})`,
+  );
   console.log("bucket    n    pred   actual   reliability          gap");
   for (let i = 0; i < 10; i++) {
     const b = buckets[i];
@@ -130,13 +133,19 @@ function main() {
   if (!filterCategory) {
     const cats = [...new Set(filtered.map((r) => r.category))].sort();
     for (const c of cats) {
-      summarize(filtered.filter((r) => r.category === c), `category=${c}`);
+      summarize(
+        filtered.filter((r) => r.category === c),
+        `category=${c}`,
+      );
     }
   }
   if (!filterMap) {
     const maps = [...new Set(filtered.map((r) => r.mapIndex))].sort((a, b) => a - b);
     for (const m of maps) {
-      summarize(filtered.filter((r) => r.mapIndex === m), `map=${m}`);
+      summarize(
+        filtered.filter((r) => r.mapIndex === m),
+        `map=${m}`,
+      );
     }
   }
 }

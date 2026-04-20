@@ -25,9 +25,7 @@ function bossItemCtx(game: GameSnapshot, tick?: Tick): HeldItemFitnessCtx {
   // bossImminent when the map offers the gym/elite node on this layer.
   // We use this to veto `lucky_egg` placement pre-boss (see item-intel).
   const candidates = tick?.ui.map?.candidates ?? [];
-  const bossImminent = candidates.some(
-    (c) => c.surfaceKind === "gym" || c.surfaceKind === "elite",
-  );
+  const bossImminent = candidates.some((c) => c.surfaceKind === "gym" || c.surfaceKind === "elite");
   const ctx: HeldItemFitnessCtx = {};
   if (typings.length > 0) ctx.nextBossTypings = typings;
   if (bossImminent) ctx.bossImminent = true;

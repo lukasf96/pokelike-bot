@@ -374,8 +374,7 @@ export function adjustMapScoreWithWinProbability(
   // tuned against 4-6 mon teams. Calibration (last 12 runs) also shows
   // wild buckets 0.5-0.7 empirically win 0% (n=2 each), reinforcing that
   // low-mid pWin wilds are basically never worth it.
-  const wildFloor =
-    aliveTeamSize <= 1 ? 0.85 : aliveTeamSize <= 2 ? 0.6 : lowHp ? 0.5 : 0.25;
+  const wildFloor = aliveTeamSize <= 1 ? 0.85 : aliveTeamSize <= 2 ? 0.6 : lowHp ? 0.5 : 0.25;
   if (intel.category === "wild" && pWin < wildFloor) return refused(pWin);
   // Boss nodes (gym/elite) never get pWin-dampened below zero. The pokelike
   // map has a single boss node at the terminal layer, so by the time it
