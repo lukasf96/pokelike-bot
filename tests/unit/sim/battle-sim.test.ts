@@ -157,6 +157,78 @@ describe("getEffectiveStat", () => {
     const weak = makeMon({ baseStats: { hp: 1, atk: 0, def: 0, special: 0, speed: 0 }, level: 1 });
     assert.ok(getEffectiveStat(weak, "atk", [], [weak]) >= 1);
   });
+
+  // F-006 invariant: the `playerTeamOnly` argument gates team-wide items
+  // regardless of which side owns the Pokémon being evaluated. This mirrors
+  // `battle.js getEffectiveStat`, which reads `state.team` (the player's)
+  // for the all-physical / all-special gates on muscle_band / wise_glasses.
+  // If someone ever refactors getEffectiveStat to read the defender's own
+  // team, enemy-held Eviolite / Muscle Band on gym leaders (Kadabra,
+  // Pikachu, Dugtrio, Growlithe, Haunter, …) silently diverges from the
+  // game and every related pWinBoss skews — this test catches that.
+  it("team-wide item gates (muscle_band) read the supplied player team only", () => {
+    const physicalAttacker = {
+      hp: 70,
+      atk: 120,
+      def: 70,
+      special: 40,
+      speed: 70,
+    };
+
+    const enemy = makeMon({
+      speciesId: 27,
+      types: ["Ground"],
+      baseStats: physicalAttacker,
+      heldItem: { id: "muscle_band" },
+    });
+
+    const allPhysicalPlayerTeam = [
+      makeMon({ speciesId: 100, baseStats: physicalAttacker }),
+      makeMon({ speciesId: 101, baseStats: physicalAttacker }),
+      makeMon({ speciesId: 102, baseStats: physicalAttacker }),
+      makeMon({ speciesId: 103, baseStats: physicalAttacker }),
+    ];
+    const allSpecialPlayerTeam = allPhysicalPlayerTeam.map((p) =>
+      makeMon({
+        speciesId: p.speciesId,
+        baseStats: { hp: 70, atk: 40, def: 70, special: 120, speed: 70 },
+      }),
+    );
+
+    // Enemy's Muscle Band gates on the PLAYER team's composition — an
+    // all-physical player team boosts the enemy's atk; an all-special
+    // player team does not.
+    const boosted = getEffectiveStat(enemy, "atk", [{ id: "muscle_band" }], allPhysicalPlayerTeam);
+    const notBoosted = getEffectiveStat(enemy, "atk", [{ id: "muscle_band" }], allSpecialPlayerTeam);
+
+    assert.ok(
+      boosted > notBoosted,
+      `muscle_band on enemy must gate on PLAYER team composition (got ${boosted} vs ${notBoosted})`,
+    );
+    // Sanity: the boost is the ~1.5× from data.js (floor rounding allows a tiny margin).
+    assert.ok(
+      boosted >= Math.floor(notBoosted * 1.45),
+      `muscle_band boost should be ~1.5× (got ${boosted / notBoosted})`,
+    );
+  });
+
+  it("Eviolite on an enemy still gates on the enemy's own evolvability (not the player team)", () => {
+    // Eviolite's gate is `canEvolve(pokemon.speciesId)` — this is evaluated
+    // on the HOLDER, not the team. The playerTeamOnly arg only controls the
+    // physical/special count gates. This test guards against a refactor
+    // accidentally confusing the two.
+    const base = { hp: 40, atk: 55, def: 60, special: 50, speed: 40 };
+    const enemyKadabra = makeMon({ speciesId: 64 /* evolves to Alakazam */, baseStats: base });
+    const enemyAlakazam = makeMon({ speciesId: 65 /* fully evolved */, baseStats: base });
+
+    const withEvi = getEffectiveStat(enemyKadabra, "def", [{ id: "eviolite" }], []);
+    const without = getEffectiveStat(enemyKadabra, "def", [], []);
+    const fullyEvoWith = getEffectiveStat(enemyAlakazam, "def", [{ id: "eviolite" }], []);
+    const fullyEvoWithout = getEffectiveStat(enemyAlakazam, "def", [], []);
+
+    assert.ok(withEvi > without, "Kadabra should get eviolite bonus");
+    assert.equal(fullyEvoWith, fullyEvoWithout, "Alakazam gets no eviolite bonus (fully evolved)");
+  });
 });
 
 describe("calcDamage", () => {

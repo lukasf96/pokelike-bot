@@ -3,6 +3,15 @@
  * Source: https://pokeapi.co/api/v2/pokemon/{1..151}
  * Regenerate: node scripts/fetch-gen1-species.mjs
  * Matches game fetchPokemonById() type normalization (data.js).
+ *
+ * F-010 NORMALIZATION: PokeAPI serves post-Gen-6 typings (Clefairy, Jigglypuff,
+ * Mr. Mime etc. have a `Fairy` slot), but the game's `TYPE_CHART` has no
+ * Fairy row. A Fairy-STAB intel score silently uses typeEffectiveness=1 while
+ * the real `getBestMove` falls through to Tackle (Normal) — so Jigglypuff
+ * sent at a Ghost gym shows as `bestOff=1` in intel but actually deals 0×.
+ * The regenerator strips Fairy from every type list (restoring Gen 1-5
+ * typings) until `data.js` adds a Fairy row to `TYPE_CHART`. Contract test:
+ * `tests/contract/type-chart-coverage.test.ts`.
  */
 
 export const GEN1_SPECIES_TYPES: Record<number, string[]> = {
@@ -40,12 +49,12 @@ export const GEN1_SPECIES_TYPES: Record<number, string[]> = {
   32: ["Poison"],
   33: ["Poison"],
   34: ["Poison", "Ground"],
-  35: ["Fairy"],
-  36: ["Fairy"],
+  35: ["Normal"],
+  36: ["Normal"],
   37: ["Fire"],
   38: ["Fire"],
-  39: ["Normal", "Fairy"],
-  40: ["Normal", "Fairy"],
+  39: ["Normal"],
+  40: ["Normal"],
   41: ["Poison", "Flying"],
   42: ["Poison", "Flying"],
   43: ["Grass", "Poison"],
@@ -127,7 +136,7 @@ export const GEN1_SPECIES_TYPES: Record<number, string[]> = {
   119: ["Water"],
   120: ["Water"],
   121: ["Water", "Psychic"],
-  122: ["Psychic", "Fairy"],
+  122: ["Psychic"],
   123: ["Bug", "Flying"],
   124: ["Ice", "Psychic"],
   125: ["Electric"],

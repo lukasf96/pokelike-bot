@@ -17,13 +17,23 @@ function capType(name) {
   return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
 }
 
+// F-010: game TYPE_CHART has no Fairy row. PokeAPI serves post-Gen-6 typings
+// (Clefairy/Jigglypuff/Mr. Mime gained a Fairy slot). Stripping Fairy here
+// restores the Gen 1-5 typings the game actually simulates. Pure-Fairy
+// species (35, 36) fall back to Normal — their Gen 1 original typing.
+function normalizeGen1Types(types) {
+  const stripped = types.filter((t) => t.toLowerCase() !== "fairy");
+  return stripped.length > 0 ? stripped : ["Normal"];
+}
+
 async function fetchPokemon(id) {
   const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
   if (!r.ok) throw new Error(`PokeAPI pokemon/${id}: HTTP ${r.status}`);
   const d = await r.json();
-  const types = [...d.types]
+  const rawTypes = [...d.types]
     .sort((a, b) => a.slot - b.slot)
     .map((t) => capType(t.type.name.replace(/-/g, " ")));
+  const types = normalizeGen1Types(rawTypes);
   const displayName = d.name
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

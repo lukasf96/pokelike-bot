@@ -116,7 +116,26 @@ export function getBestMove(
   return { name: "Tackle", power: 40, type: "Normal", isSpecial: false };
 }
 
-/** `playerTeamOnly` mirrors `state.team` in battle.js — muscle band / wise glasses / metronome counts use the player roster only. */
+/**
+ * INVARIANT — TEAM-WIDE ITEM GATES ALWAYS READ THE *PLAYER* TEAM.
+ *
+ * `muscle_band`, `wise_glasses`, `metronome`, and the Eviolite-adjacent
+ * `canEvolve` checks all gate on the composition of the player's roster
+ * (`state.team` in `battle.js`), even when the defender being stat-computed
+ * is an enemy pokemon. This is *not* a bug — the real game does the same:
+ *
+ *   // battle.js getEffectiveStat, ~L69:
+ *   const team = typeof state !== 'undefined' ? state.team : [];
+ *   const physicalCount = team.filter(p => (p.baseStats?.atk || 0) > (p.baseStats?.special || 0)).length;
+ *
+ * i.e. the game reads `state.team` regardless of which side owns the
+ * pokemon being evaluated. Callers here (including `calcDamage`) therefore
+ * pass the *player* team as `playerTeamOnly` for both attacker and defender
+ * stat lookups. Do NOT "fix" this by swapping to the defender's team —
+ * that would silently diverge from the game on every enemy holding
+ * Eviolite (Kadabra, Pikachu, Dugtrio, Growlithe, Haunter, etc.).
+ *
+ */
 export function getEffectiveStat(
   pokemon: SimPokemon,
   stat: "atk" | "def" | "special" | "spdef" | "speed",
@@ -162,6 +181,13 @@ export function getEffectiveStat(
   return Math.max(1, val);
 }
 
+/**
+ * `playerTeamForMetronome` is passed through to every `getEffectiveStat`
+ * lookup below — both for the attacker (player or enemy) and the defender.
+ * It is always the PLAYER team, never the defender's side. See the invariant
+ * comment on `getEffectiveStat` above for why this mirrors `battle.js` and
+ * must not be "fixed" to read each side's own roster.
+ */
 export function calcDamage(
   attacker: SimPokemon,
   defender: SimPokemon,
