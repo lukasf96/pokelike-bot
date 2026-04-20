@@ -9,6 +9,8 @@
     "start": "tsx src/bot.ts",
     "build": "tsc",
     "dev": "tsx watch src/bot.ts",
+    "lint": "eslint \"{src,tests,scripts}/**/*.{ts,mjs}\"",
+    "lint:fix": "eslint \"{src,tests,scripts}/**/*.{ts,mjs}\" --fix",
     "test": "node --import tsx --test --test-reporter=spec \"tests/**/*.test.ts\"",
     "test:unit": "node --import tsx --test --test-reporter=spec \"tests/unit/**/*.test.ts\"",
     "test:contract": "node --import tsx --test --test-reporter=spec \"tests/contract/**/*.test.ts\"",
@@ -25,8 +27,12 @@
     "puppeteer": "^24.41.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^25.6.0",
+    "eslint": "^10.2.1",
+    "globals": "^17.5.0",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.58.2"
   }
 }
