@@ -151,6 +151,33 @@ describe("adjustMapScoreWithWinProbability", () => {
     assert.ok(adjustMapScoreWithWinProbability(100, wild, true, 0.6) > 0);
   });
 
+  it("refuses wild fights on tiny teams even at mid pWin (variance blow-up)", () => {
+    // Solo: floor 0.85. Diagnostic: Run 12 walked solo Nidorino L12 into
+    // wild Pikachu L13 at pWin=0.54 and lost.
+    assert.ok(
+      adjustMapScoreWithWinProbability(100, wild, false, 0.55, { aliveTeamSize: 1 }) < 0,
+      "solo wild at pWin=0.55 should be refused",
+    );
+    assert.ok(
+      adjustMapScoreWithWinProbability(100, wild, false, 0.9, { aliveTeamSize: 1 }) > 0,
+      "solo wild at pWin=0.9 should pass",
+    );
+    // Duo: floor 0.6 (one crit away from solo).
+    assert.ok(
+      adjustMapScoreWithWinProbability(100, wild, false, 0.45, { aliveTeamSize: 2 }) < 0,
+      "duo wild at pWin=0.45 should be refused",
+    );
+    assert.ok(
+      adjustMapScoreWithWinProbability(100, wild, false, 0.7, { aliveTeamSize: 2 }) > 0,
+      "duo wild at pWin=0.7 should pass",
+    );
+    // Full team: legacy 0.25 floor still applies.
+    assert.ok(
+      adjustMapScoreWithWinProbability(100, wild, false, 0.3, { aliveTeamSize: 5 }) > 0,
+      "full-team wild at pWin=0.3 should still pass",
+    );
+  });
+
   it("refuses static trainers below 0.3 pWin (stricter when solo)", () => {
     assert.ok(adjustMapScoreWithWinProbability(100, trainer, false, 0.2) < 0);
     assert.ok(adjustMapScoreWithWinProbability(100, trainer, false, 0.45) > 0);

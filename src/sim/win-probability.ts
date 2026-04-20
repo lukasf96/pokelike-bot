@@ -344,7 +344,6 @@ export function adjustMapScoreWithWinProbability(
   ) {
     return refused(pWin);
   }
-  if (intel.category === "wild" && lowHp && pWin < 0.5) return refused(pWin);
   // Static trainers: hard refusal at sub-30% — losing one trainer = run
   // over, the +2 XP isn't worth gambling on a coin flip. Solo: 0.55 (no
   // backup mon, much smaller margin for variance/crit).
@@ -367,7 +366,17 @@ export function adjustMapScoreWithWinProbability(
   if (intel.category === "dynamic_trainer" && pWin < dynamicTrainerFloor) {
     return refused(pWin);
   }
-  if (intel.category === "wild" && pWin < 0.25) return refused(pWin);
+  // Wild refusal floor graduated by alive team size. Variance scales
+  // inversely with bench depth: one enemy crit against a solo mon ends the
+  // run, and the Monte Carlo sim's average-case pWin doesn't price that.
+  // Diagnostic: Run 12 walked solo Nidorino L12 (full HP) into wild
+  // Pikachu L13 at pWin=0.54 and lost — the old blanket 0.25 floor was
+  // tuned against 4-6 mon teams. Calibration (last 12 runs) also shows
+  // wild buckets 0.5-0.7 empirically win 0% (n=2 each), reinforcing that
+  // low-mid pWin wilds are basically never worth it.
+  const wildFloor =
+    aliveTeamSize <= 1 ? 0.85 : aliveTeamSize <= 2 ? 0.6 : lowHp ? 0.5 : 0.25;
+  if (intel.category === "wild" && pWin < wildFloor) return refused(pWin);
   // Boss nodes (gym/elite) never get pWin-dampened below zero. The pokelike
   // map has a single boss node at the terminal layer, so by the time it
   // appears in `candidates` it's the *only* option — a refusal here would
