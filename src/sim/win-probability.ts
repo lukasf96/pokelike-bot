@@ -368,9 +368,13 @@ export function adjustMapScoreWithWinProbability(
     return refused(pWin);
   }
   if (intel.category === "wild" && pWin < 0.25) return refused(pWin);
-  // Boss nodes (gym/elite) never get pWin-dampened — you have to walk into
-  // them eventually to clear the map. Dampening them here just reorders
-  // ties; the actual decision lives in `scoreCandidate`.
+  // Boss nodes (gym/elite) never get pWin-dampened below zero. The pokelike
+  // map has a single boss node at the terminal layer, so by the time it
+  // appears in `candidates` it's the *only* option — a refusal here would
+  // just reorder against nothing. Actual "should we walk up to the boss?"
+  // gating lives one layer earlier via `pWinBoss` → `grindMode` /
+  // `desperateGrind` / `bossWinShaky` in `scoreCandidate`, which biases
+  // trainer/catch/PC picks on layers 1–7.
   if (intel.category === "gym" || intel.category === "elite") {
     return baseScore * (0.55 + 0.45 * pWin);
   }

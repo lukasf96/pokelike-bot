@@ -5,7 +5,12 @@
 
 import { avgBstCatchPool } from "./catch-pool.js";
 import { BOSS_TYPES_BY_MAP } from "./catch-intel.js";
-import { attackingStabTypes, typeEffectiveness } from "./battle-intel.js";
+import {
+  attackingStabTypes,
+  sharedWeaknessTypes,
+  type TeamMemberBrief,
+  typeEffectiveness,
+} from "./battle-intel.js";
 import { GEN1_SPECIES_BST, GEN1_SPECIES_TYPES } from "../data/gen1-species.js";
 
 export interface ReleaseTeamMember {
@@ -107,6 +112,32 @@ export function redundancyReleaseBias(
   return bias;
 }
 
+/**
+ * Defensive redundancy bias: when the team has a shared weakness (≥ half the
+ * alive team 2× to the same attack), a member who *also* shares that weakness
+ * is extra-releasable — losing them narrows the sweep window. Only fires when
+ * removing this slot actually shrinks the shared-weakness set (otherwise the
+ * team stays equally vulnerable). Diagnostic from 32-run batch: 5 losses were
+ * 4× Grass/Poison teams swept by Erika / Blaine STAB.
+ */
+export function sharedWeaknessReleaseBias(
+  team: ReleaseTeamMember[],
+  slotIndex: number,
+): number {
+  const typesFor = (id: number): string[] => GEN1_SPECIES_TYPES[id] ?? ["Normal"];
+  const briefs: TeamMemberBrief[] = team.map((m) => ({ types: typesFor(m.speciesId) }));
+  const before = sharedWeaknessTypes(briefs);
+  if (before.size === 0) return 0;
+  const without = briefs.filter((_, i) => i !== slotIndex);
+  const after = sharedWeaknessTypes(without);
+  // Count weaknesses the removal resolves (were shared before, no longer).
+  let resolved = 0;
+  for (const w of before) {
+    if (!after.has(w)) resolved += 1;
+  }
+  return resolved * 120;
+}
+
 /** Shiny, key held items, tutor tier 2, Eevee + Moon Stone. */
 export function isHardProtectedRelease(
   member: ReleaseTeamMember,
@@ -139,7 +170,10 @@ export function pickSwapReleaseSlot(
   for (let i = 0; i < team.length; i++) {
     const m = team[i]!;
     if (isHardProtectedRelease(m, moonStoneInBag)) continue;
-    const s = slotPowerScore(m.speciesId, m.level) - redundancyReleaseBias(team, i, mapIndex);
+    const s =
+      slotPowerScore(m.speciesId, m.level) -
+      redundancyReleaseBias(team, i, mapIndex) -
+      sharedWeaknessReleaseBias(team, i);
     if (s < bestScore) {
       bestScore = s;
       best = i;
@@ -175,5 +209,9 @@ export function tradeAdjustedGainForSlot(
   const cur = slotPowerScore(m.speciesId, m.level);
   const exp = expectedTradeOfferPowerScore(mapIndex, m.level);
   const raw = exp - cur;
-  return raw - coveragePenaltyForRemovingSlot(team, slotIndex, mapIndex);
+  return (
+    raw -
+    coveragePenaltyForRemovingSlot(team, slotIndex, mapIndex) +
+    sharedWeaknessReleaseBias(team, slotIndex)
+  );
 }

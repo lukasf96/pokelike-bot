@@ -87,6 +87,7 @@ const MAX_NOTES = 2000;
 
 let current: RunDetail | null = null;
 let currentTurn = 0;
+let currentRunNumber = 0;
 let subscribed = false;
 
 function logDir(): string {
@@ -102,6 +103,21 @@ function recordNote(scope: string, msg: string): void {
 /** Called from the bot loop every tick so subsequent records know which turn they belong to. */
 export function setCurrentTurn(turn: number): void {
   currentTurn = turn;
+}
+
+/** Current turn number as last set by the bot loop. */
+export function getCurrentTurn(): number {
+  return currentTurn;
+}
+
+/** Called from the bot loop when a new run starts; available to any subscriber. */
+export function setCurrentRunNumber(runNumber: number): void {
+  currentRunNumber = runNumber;
+}
+
+/** Current run number as last set by the bot loop. */
+export function getCurrentRunNumber(): number {
+  return currentRunNumber;
 }
 
 export function startRunDetail(runNumber: number): void {

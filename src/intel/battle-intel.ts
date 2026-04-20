@@ -64,6 +64,35 @@ export function attackingStabTypes(types: string[]): string[] {
   return nonNorm.length > 0 ? nonNorm : types;
 }
 
+/**
+ * Attack types that at least *half* the alive team is weak to (defensive
+ * multiplier ≥ 2×). When the next boss has STAB in one of these, we're
+ * walking into a sweep — multiple team members get one-shot by the same
+ * attack. Used to route around the boss (P3 refusal alone isn't enough
+ * because pWin estimates didn't always catch this pre-calibration) and to
+ * penalise additional catches that share the same typing.
+ *
+ * Diagnostic from 32-run batch: Grass/Poison appeared on 5+ team members
+ * in 18/32 runs; Erika (Grass) and Blaine (Fire) both sweep those teams
+ * without needing a good roll.
+ */
+export function sharedWeaknessTypes(team: TeamMemberBrief[]): Set<string> {
+  const alive = team.filter((p) => !(p.isFainted === true));
+  if (alive.length === 0) return new Set();
+  // Count how many alive members each attack type hits for ≥2x.
+  const weak = new Map<string, number>();
+  for (const attackType of Object.keys(TYPE_CHART)) {
+    let n = 0;
+    for (const p of alive) {
+      if (typeEffectiveness(attackType, p.types) >= 2) n += 1;
+    }
+    if (n >= Math.ceil(alive.length / 2) && n >= 2) {
+      weak.set(attackType.toLowerCase(), n);
+    }
+  }
+  return new Set(weak.keys());
+}
+
 const TRAINER_SPECIES_POOL: Map<string, number[]> = new Map([
   ["bugcatcher", [10, 11, 12, 13, 14, 15, 46, 47, 48, 49, 123, 127]],
   ["hiker", [27, 28, 50, 51, 66, 67, 68, 74, 75, 76, 95, 111, 112]],
@@ -514,6 +543,12 @@ export interface ScoreCandidateContext extends IntelContext {
   bossMaxLevel?: number;
   /** True when ≥1 team member's STAB hits the *current* map's boss SE. */
   teamHasBossCounter?: boolean;
+  /**
+   * True when ≥ half of the alive team shares a weakness that the upcoming
+   * boss's STAB hits. Triggers catch/PC preference over walking into the
+   * gym (P1). Computed once per map tick in the handler.
+   */
+  bossSharedWeakness?: boolean;
 }
 
 export function scoreCandidate(
@@ -536,6 +571,7 @@ export function scoreCandidate(
   const bossLeadLevel = typeof ctx.bossLeadLevel === "number" ? ctx.bossLeadLevel : 10;
   const bossMaxLevel = typeof ctx.bossMaxLevel === "number" ? ctx.bossMaxLevel : bossLeadLevel + 2;
   const teamHasBossCounter = ctx.teamHasBossCounter === true;
+  const bossSharedWeakness = ctx.bossSharedWeakness === true;
 
   // Pre-boss urgency mode (boss reachable in 1–2 layers): the Pokemon Center
   // layer is the *last* heal — refusing it routinely costs the run.
@@ -600,6 +636,16 @@ export function scoreCandidate(
     else if (hpRatio < 0.8) base = 12;
     else if (hpRatio < 0.95) base = 4;
     else base = -2;
+    // Shared-weakness + bossImminent: the last PC before the gym is our
+    // only insurance against the boss's sweeper turning into multiple
+    // one-shots. Force PC even at full HP because we're about to take
+    // damage by design — every slot at max HP is one more HP we need
+    // to tank through. Diagnostic: Misty sweeps at full HP still happened
+    // 3× in the batch; PC would have extended the fight by one turn.
+    if (bossImminent && bossSharedWeakness && base < 25) base = 25;
+    // Tiny-team + bossImminent: even without shared-weakness, a 2-mon
+    // team entering the boss is one crit from a wipe. Heal fully.
+    if (bossImminent && aliveTeamSize <= 2 && base < 18) base = 18;
   } else if (cand.surfaceKind === "catch") {
     // Catch base reflects three competing forces:
     //   • Tiny team: must build type coverage NOW (Bulbasaur alone = run loss
@@ -624,6 +670,11 @@ export function scoreCandidate(
     else if (grindMode)
       base = 1; // grinding XP > catching for cap closing
     else base = 4;
+    // Shared-weakness bias: if the team has a defensive shared weakness
+    // the upcoming boss will exploit, a *new* type is disproportionately
+    // valuable. Bump the base so we catch even when grinding is nominally
+    // preferred. The actual resist bonus is inside `scoreCatchCandidate`.
+    if (bossSharedWeakness && !teamSaturated) base += 8;
   } else if (cand.surfaceKind === "item" || cand.surfaceKind === "move_tutor") {
     base = grindMode ? 2 : 3;
   } else if (cand.surfaceKind === "question") base = expectedQuestionMarkSurfaceBase();
@@ -671,6 +722,12 @@ export function scoreCandidate(
       // in scoreCandidate; the actual decision to engage is forced by the
       // map graph (you must clear the boss to advance).
       base = 1;
+      // Shared-weakness before walking into the boss's STAB = sweep risk.
+      // Drop the gym base score so PC / catch / sibling trainer wins. P3's
+      // pWin < 0.35 refusal helps, but the shared-weakness signal catches
+      // runs where pWin is nominally high (gym has bulky walls but 1 STAB
+      // sweeper that one-shots 4 of our mons in a row).
+      if (bossSharedWeakness) base = -4;
     }
   } else if (cand.surfaceKind === "trade") base = 1;
 

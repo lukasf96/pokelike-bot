@@ -2,11 +2,13 @@ import {
   type MapCandidateBrief,
   type NodeIntel,
   type ScoreCandidateContext,
+  type TeamMemberBrief,
   attackingStabTypes,
   bossLevelStats,
   inferNodeIntel,
   pickBattlePrepIntel,
   scoreCandidate,
+  sharedWeaknessTypes,
   shouldReorderForBattle,
   computeTeamOrder,
   computeTeamOrderAssignment,
@@ -15,7 +17,12 @@ import {
 } from "../intel/battle-intel.js";
 import { BOSS_TYPES_BY_MAP } from "../intel/catch-intel.js";
 import { logAction } from "../logging/logger.js";
-import { recordDecision } from "../logging/run-detail-log.js";
+import {
+  getCurrentRunNumber,
+  getCurrentTurn,
+  recordDecision,
+} from "../logging/run-detail-log.js";
+import { setPendingBattle } from "../logging/battle-outcome-log.js";
 import {
   adjustMapScoreWithWinProbability,
   estimateBattleWinProbability,
@@ -112,6 +119,27 @@ export const handleMap: Handler = async (initialTick, ctx) => {
     if (teamHasBossCounter) break;
   }
 
+  // Shared-weakness detection (P1): is there an attack type that ≥ half the
+  // alive team takes 2× from, AND the boss has STAB in it? If yes, walking
+  // into the gym is a multi-slot sweep risk — `scoreCandidate` will
+  // down-weight the gym and bump catch/PC.
+  const aliveBriefs: TeamMemberBrief[] = game.team
+    .filter((p) => p.hp.current > 0)
+    .map((p) => ({ types: p.types, level: p.level }));
+  const sharedWeak = sharedWeaknessTypes(aliveBriefs);
+  let bossSharedWeakness = false;
+  if (sharedWeak.size > 0 && currentBossTypes.length > 0) {
+    // The boss's STAB is exactly its primary typing(s). Anything the team
+    // is weak to that overlaps the boss's attacks is a shared-weakness hit.
+    const bossStab = new Set(currentBossTypes.map((t) => t.toLowerCase()));
+    for (const st of sharedWeak) {
+      if (bossStab.has(st)) {
+        bossSharedWeakness = true;
+        break;
+      }
+    }
+  }
+
   const scoreCtx: ScoreCandidateContext = {
     ...context,
     hpRatio: hp.ratio,
@@ -124,6 +152,7 @@ export const handleMap: Handler = async (initialTick, ctx) => {
     bossLeadLevel,
     bossMaxLevel,
     teamHasBossCounter,
+    bossSharedWeakness,
   };
 
   const scored = candidates.map((c) => {
@@ -164,6 +193,34 @@ export const handleMap: Handler = async (initialTick, ctx) => {
     await reorderTeam(ctx, order);
     const detail = formatPrepDetail(chosen.surfaceKind, prep.intel);
     logAction("map", `team order → [${order.join(",")}] for ${prep.intel.category}${detail}`);
+  }
+
+  // ── Predicted-vs-actual instrumentation (F-012) ─────────────────────────
+  // If the chosen node is a battle node, stash the prediction so the bot
+  // loop can resolve it with won/lost the moment we exit the battle phase.
+  const chosenIntel = inferNodeIntel(chosen.href, context);
+  const chosenCategory = chosenIntel.category;
+  const isBattleNode =
+    chosenCategory === "trainer" ||
+    chosenCategory === "dynamic_trainer" ||
+    chosenCategory === "wild" ||
+    chosenCategory === "legendary" ||
+    chosenCategory === "gym" ||
+    chosenCategory === "elite";
+  if (isBattleNode) {
+    setPendingBattle({
+      runNumber: getCurrentRunNumber(),
+      tick: getCurrentTurn(),
+      surfaceKind: chosen.surfaceKind,
+      category: chosenCategory,
+      mapIndex: game.currentMap,
+      eliteIndex: game.eliteIndex,
+      pWin: Number(best.pWin.toFixed(4)),
+      teamMaxLevel,
+      aliveTeamSize,
+      hpRatio: Number(hp.ratio.toFixed(3)),
+      bossImminent,
+    });
   }
 
   await ctx.page.evaluate((pickIndex: number) => {
@@ -209,7 +266,7 @@ export const handleMap: Handler = async (initialTick, ctx) => {
   const levelGap = bossMaxLevel - teamMaxLevel;
   logAction(
     "map",
-    `Team hp ${Math.round(hp.ratio * 100)}% · faint ${hp.fainted} · crit ${hp.critical} · lowHp ${hp.lowHp} · map ${game.currentMap} · elite ${game.eliteIndex} · pWinBoss ${pWinBoss.toFixed(2)} · teamMaxL ${teamMaxLevel}/${bossMaxLevel} (gap ${levelGap})${bossImminent ? " · BOSS_IMMINENT" : ""}${pcAvailable ? " · pc" : ""}`,
+    `Team hp ${Math.round(hp.ratio * 100)}% · faint ${hp.fainted} · crit ${hp.critical} · lowHp ${hp.lowHp} · map ${game.currentMap} · elite ${game.eliteIndex} · pWinBoss ${pWinBoss.toFixed(2)} · teamMaxL ${teamMaxLevel}/${bossMaxLevel} (gap ${levelGap})${bossImminent ? " · BOSS_IMMINENT" : ""}${pcAvailable ? " · pc" : ""}${bossSharedWeakness ? " · SHARED_WEAKNESS" : ""}`,
   );
 
   await sleep(1200);

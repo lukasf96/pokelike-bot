@@ -260,6 +260,57 @@ describe("heldItemFitnessAtSlot", () => {
   });
 });
 
+describe("heldItemFitnessAtSlot — P2 overhaul", () => {
+  const physMon = mon({
+    speciesId: 128,
+    level: 25,
+    types: ["Normal"],
+    baseStats: { hp: 75, atk: 100, def: 95, special: 40, spdef: 70, speed: 110 },
+  });
+  const specMon = mon({
+    speciesId: 65,
+    level: 25,
+    types: ["Psychic"],
+    baseStats: { hp: 55, atk: 50, def: 45, special: 135, spdef: 95, speed: 120 },
+  });
+
+  it("choice_band prefers the physical attacker, not the special one", () => {
+    const team: TeamMemberForItem[] = [specMon, physMon];
+    const idx = bestPokemonIndexForHeldItem("choice_band", team);
+    assert.equal(idx, 1, `expected Tauros-slot (1), got ${idx}`);
+  });
+
+  it("choice_specs prefers the special attacker, not the physical one", () => {
+    const team: TeamMemberForItem[] = [physMon, specMon];
+    const idx = bestPokemonIndexForHeldItem("choice_specs", team);
+    assert.equal(idx, 1, `expected Alakazam-slot (1), got ${idx}`);
+  });
+
+  it("type-boost items score zero on an unrelated Pokémon (was 0.35×)", () => {
+    const team: TeamMemberForItem[] = [
+      mon({ speciesId: 7, level: 20, types: ["Water"] }), // Squirtle
+    ];
+    // twisted_spoon boosts Psychic — Water has no Psychic typing.
+    const fit = heldItemFitnessAtSlot("twisted_spoon", 0, team);
+    assert.equal(fit, 0, `expected 0 for non-matching typing, got ${fit}`);
+  });
+
+  it("lucky_egg is deeply negative when bossImminent (pre-boss upkeep gate)", () => {
+    const team: TeamMemberForItem[] = [
+      mon({ speciesId: 3, level: 30, types: ["Grass", "Poison"] }),
+    ];
+    const neutral = heldItemFitnessAtSlot("lucky_egg", 0, team);
+    const bossImminent = heldItemFitnessAtSlot("lucky_egg", 0, team, {
+      bossImminent: true,
+    });
+    assert.ok(neutral > 0, `lucky_egg neutral should be positive, got ${neutral}`);
+    assert.ok(
+      bossImminent < -1000,
+      `lucky_egg should be deeply negative at bossImminent, got ${bossImminent}`,
+    );
+  });
+});
+
 describe("optimalHeldItemPermutation", () => {
   it("returns null when fewer than two Pokémon hold items", () => {
     const team: TeamMemberForItem[] = [

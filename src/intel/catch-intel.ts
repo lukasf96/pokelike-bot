@@ -5,7 +5,12 @@
 
 import { GEN1_SPECIES_BST, GEN1_SPECIES_TYPES } from "../data/gen1-species.js";
 import { GEN1_EVOLUTIONS, CROSS_SPECIES_EVOLUTION_BST } from "../data/gen1-evolutions.js";
-import { typeEffectiveness, attackingStabTypes } from "./battle-intel.js";
+import {
+  typeEffectiveness,
+  attackingStabTypes,
+  sharedWeaknessTypes,
+  type TeamMemberBrief,
+} from "./battle-intel.js";
 
 /**
  * Boss types for maps 0–8 (indexed by mapIndex). Used to reward type coverage.
@@ -246,6 +251,33 @@ export function scoreCatchCandidate(
   // ── (d) Shiny bonus ──────────────────────────────────────────────────────
   if (isShiny && finalBst >= 400) score += 30;
   else if (isShiny) score += 10;
+
+  // ── (d2) Shared-weakness penalty ─────────────────────────────────────────
+  // If the team already has a type that ≥ half the alive team is weak to,
+  // adding another Pokémon with that weakness compounds the problem:
+  // one boss-lead super-effective hit clears multiple slots in a single
+  // turn. Penalise candidates that *share* any existing shared weakness.
+  //
+  // Diagnostic from 32-run batch: 5/32 losses had 4+ Grass/Poison mons on
+  // the team, making Erika / Blaine auto-losses. The previous duplicate-
+  // STAB penalty caught offensive overlap but not defensive overlap.
+  const teamBriefs: TeamMemberBrief[] = teamTypes.map((types) => ({ types }));
+  const shared = sharedWeaknessTypes(teamBriefs);
+  if (shared.size > 0) {
+    const candTypes = speciesTypes(speciesId);
+    let sharedHits = 0;
+    let sharedResists = 0;
+    for (const st of shared) {
+      const eff = typeEffectiveness(st, candTypes);
+      if (eff >= 2) sharedHits += 1;
+      else if (eff <= 0.5) sharedResists += 1;
+    }
+    if (sharedHits > 0) score -= 60 * sharedHits;
+    // Resisting a team-wide weakness is as valuable as gaining coverage —
+    // it breaks the sweep. Bonus scales with how many of the shared
+    // weaknesses this candidate resists.
+    if (sharedResists > 0) score += 70 * sharedResists;
+  }
 
   // ── (e) Boss-imminent deadweight multiplier ─────────────────────────────
   // The additive ±200 in (a) is dwarfed by `BST × √level` for late-game

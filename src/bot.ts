@@ -33,7 +33,12 @@ import { handleTransition } from "./handlers/transition.js";
 import { handleWin } from "./handlers/win.js";
 import { clickFirst, humanDelay, sleep } from "./utility/page-utils.js";
 import { handleRunLogEvent } from "./logging/run-log.js";
-import { setCurrentTurn } from "./logging/run-detail-log.js";
+import { setCurrentRunNumber, setCurrentTurn } from "./logging/run-detail-log.js";
+import {
+  clearPendingBattle,
+  hasPendingBattle,
+  resolvePendingBattle,
+} from "./logging/battle-outcome-log.js";
 import type { Handler, HandlerCtx } from "./state/handler.js";
 import { RunMachine, type RunEvent } from "./state/run-machine.js";
 import { observe } from "./state/snapshot.js";
@@ -84,6 +89,27 @@ function processEvents(events: RunEvent[], tick: Tick, currentTurn: number): voi
     if (e.type === "phase-changed") {
       const peek = screenPeekLine(e.to.kind, tick.ui.peek?.raw ?? "");
       if (peek) logScreenPeek(peek);
+      // ── Battle-outcome resolution (F-012) ─────────────────────────────
+      // When we leave the `battle` phase, the outcome of the previous
+      // combat is decided: anything other than `gameover` / `title` /
+      // `trainer` is a win; defeats are captured by the `run-ended`
+      // branch below. We also guard with `hasPendingBattle()` so purely
+      // UI-driven phase blips don't double-resolve.
+      if (e.from.kind === "battle" && e.to.kind !== "battle" && hasPendingBattle()) {
+        const wonThisBattle =
+          e.to.kind !== "gameover" && e.to.kind !== "title" && e.to.kind !== "trainer";
+        resolvePendingBattle(wonThisBattle, currentTurn);
+      }
+    } else if (e.type === "run-ended") {
+      // Defeat during an active battle: resolve any pending prediction as
+      // lost, then clear so we don't carry it across runs.
+      if (e.outcome === "lost" && hasPendingBattle()) {
+        resolvePendingBattle(false, currentTurn);
+      }
+      clearPendingBattle();
+    } else if (e.type === "run-started") {
+      setCurrentRunNumber(e.runNumber);
+      clearPendingBattle();
     }
   }
 }
@@ -131,6 +157,7 @@ async function runBot(): Promise<void> {
     const tick = await safeObserve(page, tickId);
     const events = machine.step(tick);
     setCurrentTurn(machine.turnNumber);
+    setCurrentRunNumber(machine.runNumber);
 
     for (const e of events) {
       if (e.type === "run-ended") {

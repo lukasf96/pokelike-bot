@@ -176,6 +176,9 @@ describe("adjustMapScoreWithWinProbability", () => {
   });
 
   it("boss nodes (gym/elite) never get refused — only multiplied", () => {
+    // The pokelike map terminates in a single boss node, so when a gym/elite
+    // reaches `candidates` it's always the only option; refusing it would
+    // just re-order against nothing. We keep it strictly multiplicative.
     const g = adjustMapScoreWithWinProbability(100, gym, false, 0.1);
     const e = adjustMapScoreWithWinProbability(100, elite, false, 0.1);
     assert.ok(g > 0 && e > 0, `bosses should never be negatived (got gym=${g}, elite=${e})`);

@@ -70,13 +70,22 @@ function isPhysicalAttacker(m: TeamMemberForItem): boolean {
   return (m.baseStats?.atk ?? 0) > (m.baseStats?.special ?? 0);
 }
 
-/** STAB weight for a type-boost item: prefer Pokémon where that type is a STAB typing. */
+/**
+ * STAB weight for a type-boost item. A +50% damage item is *only* useful to a
+ * Pokémon that actually attacks with that type — handing `charcoal` to a
+ * Blastoise produces literally zero combat benefit. So we gate hard:
+ *   • primary STAB (this type is what they'd pick in `attackingStabTypes`) → 2.2
+ *   • secondary typing (Bulbasaur/Poison has Poison in types but Grass as STAB) → 1.4
+ *   • unrelated typing → 0 (was 0.35; diagnostic: twisted_spoon landed on
+ *     Blastoise because 0.35 × BST × √L beat a fresh Psychic's 2.2 × BST × √L
+ *     only marginally, and lost when Blastoise's level was high).
+ */
 function stabMultiplier(types: string[], attackType: string): number {
   const cap = capType(attackType);
   const stab = new Set(attackingStabTypes(types).map(capType));
   if (stab.has(cap)) return 2.2;
   if (types.some((t) => capType(t) === cap)) return 1.4;
-  return 0.35;
+  return 0;
 }
 
 function powerPhysical(m: TeamMemberForItem): number {
@@ -147,6 +156,13 @@ export interface HeldItemFitnessCtx {
    * Electric Pokémon is sitting next to Misty.
    */
   nextBossTypings?: string[][];
+  /**
+   * True when the next map candidate layer exposes the boss. Used to filter
+   * non-combat items (`lucky_egg`) out of equip decisions — we want combat
+   * fitness on all 6 slots before we punch into the gym, not a 1.06× XP
+   * multiplier on the carry.
+   */
+  bossImminent?: boolean;
 }
 
 /**
@@ -177,18 +193,25 @@ export function heldItemFitnessAtSlot(
   // Items that scale with raw offense should reward attackers who actually
   // damage the next boss. `bossMult` is in [0.5, 2.0]+ — we apply it only to
   // damage-amplifying items, not bulk/utility items.
+  // Attacker-stat match: Choice Band / Muscle Band on a special attacker is
+  // mis-assignment. We multiply by a factor that is 1.0 when the Pokémon's
+  // dominant attacking stat matches, and 0.35 when it doesn't. Previously
+  // choice_band used raw `powerPhysical` with no gate, and choice_specs
+  // used raw `powerSpecial` — both landed on the wrong mon when the right
+  // kind of attacker had slightly lower √L × stat.
+  const phys = isPhysicalAttacker(p);
   switch (itemId) {
     case "choice_band":
-      return powerPhysical(p) * bossMult;
+      return powerPhysical(p) * (phys ? 1 : 0.35) * bossMult;
     case "choice_specs":
-      return powerSpecial(p) * bossMult;
+      return powerSpecial(p) * (phys ? 0.35 : 1) * bossMult;
     case "muscle_band": {
       const base = powerPhysical(p);
-      return (isPhysicalAttacker(p) ? base * 1.35 : base * 0.55) * bossMult;
+      return (phys ? base * 1.35 : base * 0.35) * bossMult;
     }
     case "wise_glasses": {
       const base = powerSpecial(p);
-      return (!isPhysicalAttacker(p) ? base * 1.35 : base * 0.55) * bossMult;
+      return (!phys ? base * 1.35 : base * 0.35) * bossMult;
     }
     case "choice_scarf":
       return (p.baseStats?.speed ?? 50) * Math.sqrt(p.level);
@@ -203,6 +226,11 @@ export function heldItemFitnessAtSlot(
       return share * 100 + bst(p);
     }
     case "lucky_egg":
+      // Pre-boss, XP items are strictly worse than even a marginal combat
+      // item — we need our 6 slots dedicated to winning the next fight,
+      // not soaking up future XP. Return a deeply negative score so every
+      // attacking/bulk item beats it.
+      if (ctx?.bossImminent) return -1e5;
       return luckyEggSlotFitness(p);
     case "leftovers":
     case "rocky_helmet":

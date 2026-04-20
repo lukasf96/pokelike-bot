@@ -13,7 +13,7 @@ import type { GameSnapshot, Tick } from "../state/types.js";
 import { sleep } from "../utility/page-utils.js";
 
 /** Build the next-boss item context from the current game snapshot. */
-function bossItemCtx(game: GameSnapshot): HeldItemFitnessCtx {
+function bossItemCtx(game: GameSnapshot, tick?: Tick): HeldItemFitnessCtx {
   const intel: NodeIntel =
     game.currentMap >= 8
       ? { category: "elite", eliteIndex: game.eliteIndex }
@@ -22,7 +22,16 @@ function bossItemCtx(game: GameSnapshot): HeldItemFitnessCtx {
     currentMap: game.currentMap,
     eliteIndex: game.eliteIndex,
   });
-  return typings.length > 0 ? { nextBossTypings: typings } : {};
+  // bossImminent when the map offers the gym/elite node on this layer.
+  // We use this to veto `lucky_egg` placement pre-boss (see item-intel).
+  const candidates = tick?.ui.map?.candidates ?? [];
+  const bossImminent = candidates.some(
+    (c) => c.surfaceKind === "gym" || c.surfaceKind === "elite",
+  );
+  const ctx: HeldItemFitnessCtx = {};
+  if (typings.length > 0) ctx.nextBossTypings = typings;
+  if (bossImminent) ctx.bossImminent = true;
+  return ctx;
 }
 
 /** Click `#item-bar` badge at `bagBadgeIdx` (same order as `state.items`), then Equip/Swap onto `slotIdx`. */
@@ -99,7 +108,7 @@ export async function maybeOptimizeHeldItemSwaps(
 ): Promise<void> {
   if (!initialTick.game) return;
   const team = selectItemTeam(initialTick.game);
-  const bossCtx = bossItemCtx(initialTick.game);
+  const bossCtx = bossItemCtx(initialTick.game, initialTick);
   const opt = optimalHeldItemPermutation(team, bossCtx);
   if (!opt) return;
 
@@ -166,7 +175,7 @@ export async function maybeEquipBagHeldItems(initialTick: Tick, ctx: HandlerCtx)
     const bag = tick.game.bag;
     const equipCandidates = bag.filter((b) => !b.usable && b.id);
     if (equipCandidates.length === 0) break;
-    const bossCtx = bossItemCtx(tick.game);
+    const bossCtx = bossItemCtx(tick.game, tick);
 
     const emptySlots: number[] = [];
     for (let i = 0; i < team.length; i += 1) {
