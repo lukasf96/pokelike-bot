@@ -105,7 +105,7 @@ const ELITE_NAME_TO_INDEX: Record<string, number> = {
  * The battle subtitle ("Elite Four - Battle 3/4" / "Final Battle!") and the
  * boss name are the only live signals we have at defeat time.
  */
-function deriveEliteIndex(
+export function deriveEliteIndex(
   title: string,
   subtitle: string,
   fallback: number,
@@ -122,7 +122,7 @@ function deriveEliteIndex(
   return fallback;
 }
 
-function parseDefeatContext(
+export function parseDefeatContext(
   title: string,
   subtitle: string,
   game: GameSnapshot | null,
