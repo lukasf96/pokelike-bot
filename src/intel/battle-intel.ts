@@ -705,7 +705,13 @@ export function scoreCandidate(
     // valuable. Bump the base so we catch even when grinding is nominally
     // preferred. The actual resist bonus is inside `scoreCatchCandidate`.
     if (bossSharedWeakness && !teamSaturated) base += 8;
-  } else if (cand.surfaceKind === "item" || cand.surfaceKind === "move_tutor") {
+  } else if (cand.surfaceKind === "move_tutor") {
+    // Move tutor upgrades tier 0→1 (~doubles move power) or tier 1→2 (~+30%).
+    // This is the largest single DPS multiplier available and should be preferred
+    // over item nodes and most XP nodes. Drop score only in grindMode since
+    // closing a severe level gap matters more than a power spike on a weak mon.
+    base = grindMode ? 4 : 7;
+  } else if (cand.surfaceKind === "item") {
     base = grindMode ? 2 : 3;
   } else if (cand.surfaceKind === "question") base = expectedQuestionMarkSurfaceBase();
   else if (
