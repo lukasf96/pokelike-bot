@@ -6,7 +6,7 @@
 import { avgBstCatchPool } from "./catch-pool.js";
 import { BOSS_TYPES_BY_MAP } from "./catch-intel.js";
 import { attackingStabTypes, typeEffectiveness } from "./battle-intel.js";
-import { GEN1_SPECIES_BST, GEN1_SPECIES_TYPES } from "./data/gen1-species.js";
+import { GEN1_SPECIES_BST, GEN1_SPECIES_TYPES } from "../data/gen1-species.js";
 
 export interface ReleaseTeamMember {
   speciesId: number;

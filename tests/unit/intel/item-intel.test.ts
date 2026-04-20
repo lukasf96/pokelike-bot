@@ -10,7 +10,7 @@ import {
   scoreItemPick,
   TYPE_BOOST_ATTACK_TYPE,
   type TeamMemberForItem,
-} from "../../src/item-intel.ts";
+} from "../../../src/intel/item-intel.ts";
 
 function mon(over: Partial<TeamMemberForItem> & Pick<TeamMemberForItem, "types" | "level" | "speciesId">): TeamMemberForItem {
   return {

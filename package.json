@@ -12,7 +12,7 @@
     "test": "node --import tsx --test --test-reporter=spec \"tests/**/*.test.ts\"",
     "test:unit": "node --import tsx --test --test-reporter=spec \"tests/unit/**/*.test.ts\"",
     "test:contract": "node --import tsx --test --test-reporter=spec \"tests/contract/**/*.test.ts\"",
-    "test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-exclude=\"src/bot.ts\" --test-coverage-exclude=\"src/page-utils.ts\" --test-coverage-exclude=\"src/logger.ts\" --test-coverage-exclude=\"src/run-detail-log.ts\" --test-coverage-exclude=\"src/state/snapshot.ts\" --test-coverage-exclude=\"src/state/handler.ts\" --test-coverage-exclude=\"src/handlers/**\" --test-coverage-exclude=\"tests/**\" --test-reporter=spec \"tests/**/*.test.ts\"",
+    "test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-exclude=\"src/bot.ts\" --test-coverage-exclude=\"src/utility/page-utils.ts\" --test-coverage-exclude=\"src/logging/logger.ts\" --test-coverage-exclude=\"src/logging/run-detail-log.ts\" --test-coverage-exclude=\"src/state/snapshot.ts\" --test-coverage-exclude=\"src/state/handler.ts\" --test-coverage-exclude=\"src/handlers/**\" --test-coverage-exclude=\"tests/**\" --test-reporter=spec \"tests/**/*.test.ts\"",
     "gen:species": "node scripts/fetch-gen1-species.mjs",
     "gen:base-stats": "node scripts/fetch-gen1-base-stats.mjs",
     "gen:typechart": "node scripts/fetch-type-chart.mjs",

@@ -3,8 +3,8 @@
  * will fight the most future battles — modeled as BST × √level among final-evolution Pokémon.
  */
 
-import { GEN1_EVOLUTIONS } from "./data/gen1-evolutions.js";
-import { GEN1_SPECIES_BST } from "./data/gen1-species.js";
+import { GEN1_EVOLUTIONS } from "../data/gen1-evolutions.js";
+import { GEN1_SPECIES_BST } from "../data/gen1-species.js";
 
 export interface TutorTeamSlot {
   speciesId: number;

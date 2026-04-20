@@ -1,11 +1,11 @@
 import type { Handler } from "../state/handler.js";
-import { logAction } from "../logger.js";
+import { logAction } from "../logging/logger.js";
 import {
   isHardProtectedRelease,
   tradeAdjustedGainForSlot,
-} from "../release-candidate-intel.js";
+} from "../intel/release-candidate-intel.js";
 import { selectMoonStoneInBag, selectReleaseTeam } from "../state/selectors.js";
-import { clickSel, sleep } from "../page-utils.js";
+import { clickSel, sleep } from "../utility/page-utils.js";
 
 /** B5: expected single-mon swing should clear variance + coverage cost. */
 const MIN_TRADE_ADJUSTED_GAIN = 60;

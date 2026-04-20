@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { deriveEliteIndex, parseDefeatContext } from "../../src/run-log.ts";
-import type { GameSnapshot } from "../../src/state/types.ts";
+import { deriveEliteIndex, parseDefeatContext } from "../../../src/logging/run-log.ts";
+import type { GameSnapshot } from "../../../src/state/types.ts";
 
 // ── deriveEliteIndex ────────────────────────────────────────────────────────
 //

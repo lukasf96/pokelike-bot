@@ -1,16 +1,16 @@
 import type { Page } from "puppeteer";
 
-import { enemyTypingsForIntel, type NodeIntel } from "../battle-intel.js";
-import { logAction } from "../logger.js";
+import { enemyTypingsForIntel, type NodeIntel } from "../intel/battle-intel.js";
+import { logAction } from "../logging/logger.js";
 import {
   heldItemFitnessAtSlot,
   optimalHeldItemPermutation,
   type HeldItemFitnessCtx,
-} from "../item-intel.js";
+} from "../intel/item-intel.js";
 import type { HandlerCtx } from "../state/handler.js";
 import { selectItemTeam } from "../state/selectors.js";
 import type { GameSnapshot, Tick } from "../state/types.js";
-import { sleep } from "../page-utils.js";
+import { sleep } from "../utility/page-utils.js";
 
 /** Build the next-boss item context from the current game snapshot. */
 function bossItemCtx(game: GameSnapshot): HeldItemFitnessCtx {

@@ -1,7 +1,7 @@
 import type { Handler } from "../state/handler.js";
 import { GEN1_SPECIES_BST } from "../data/gen1-species.js";
-import { logAction } from "../logger.js";
-import { clickSel, sleep } from "../page-utils.js";
+import { logAction } from "../logging/logger.js";
+import { clickSel, sleep } from "../utility/page-utils.js";
 import type { GameSnapshot } from "../state/types.js";
 
 interface ShinyDecisionInput {

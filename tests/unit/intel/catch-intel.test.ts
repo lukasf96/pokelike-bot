@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { scoreCatchCandidate } from "../../src/catch-intel.ts";
+import { scoreCatchCandidate } from "../../../src/intel/catch-intel.ts";
 
 // Species IDs used in these tests:
 //   1  Bulbasaur   (Grass/Poison) → evolves through Venusaur (final BST 525)

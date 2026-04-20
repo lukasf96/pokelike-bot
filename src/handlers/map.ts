@@ -11,15 +11,15 @@ import {
   computeTeamOrder,
   computeTeamOrderForQuestionMark,
   typeEffectiveness,
-} from "../battle-intel.js";
-import { BOSS_TYPES_BY_MAP } from "../catch-intel.js";
-import { logAction } from "../logger.js";
-import { recordDecision } from "../run-detail-log.js";
+} from "../intel/battle-intel.js";
+import { BOSS_TYPES_BY_MAP } from "../intel/catch-intel.js";
+import { logAction } from "../logging/logger.js";
+import { recordDecision } from "../logging/run-detail-log.js";
 import { adjustMapScoreWithWinProbability, estimateBattleWinProbability } from "../sim/win-probability.js";
 import type { Handler, HandlerCtx } from "../state/handler.js";
 import { selectBagItemIds, selectItemTeam, selectTeamBrief, selectTeamHp } from "../state/selectors.js";
 import type { Tick } from "../state/types.js";
-import { sleep } from "../page-utils.js";
+import { sleep } from "../utility/page-utils.js";
 import { maybeEquipBagHeldItems, maybeOptimizeHeldItemSwaps } from "./held-item-swaps.js";
 import { maybeUseUsableItems } from "./usable-item.js";
 import { dismissTutorial } from "./startup.js";

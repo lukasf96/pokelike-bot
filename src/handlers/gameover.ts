@@ -1,5 +1,5 @@
 import type { Handler } from "../state/handler.js";
-import { clickFirst, sleep } from "../page-utils.js";
+import { clickFirst, sleep } from "../utility/page-utils.js";
 
 export const handleGameOver: Handler = async (_tick, { page }) => {
   await clickFirst(page, "#gameover-screen button");

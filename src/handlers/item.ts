@@ -1,8 +1,8 @@
 import type { Handler } from "../state/handler.js";
-import { itemNameToId, scoreItemPick } from "../item-intel.js";
-import { logAction } from "../logger.js";
+import { itemNameToId, scoreItemPick } from "../intel/item-intel.js";
+import { logAction } from "../logging/logger.js";
 import { selectItemTeam } from "../state/selectors.js";
-import { sleep } from "../page-utils.js";
+import { sleep } from "../utility/page-utils.js";
 
 export const handleItem: Handler = async (tick, { page }) => {
   const names = tick.ui.item?.names ?? [];

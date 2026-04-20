@@ -9,8 +9,8 @@ import path from "node:path";
 
 import { logAction, logError } from "./logger.js";
 import { endRunDetail, startRunDetail } from "./run-detail-log.js";
-import type { RunEvent } from "./state/run-machine.js";
-import type { GameSnapshot, Pokemon, Tick } from "./state/types.js";
+import type { RunEvent } from "../state/run-machine.js";
+import type { GameSnapshot, Pokemon, Tick } from "../state/types.js";
 
 export interface RunLogTeamMember {
   speciesId: number;

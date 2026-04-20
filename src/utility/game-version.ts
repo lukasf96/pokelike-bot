@@ -1,8 +1,8 @@
 import type { Page } from "puppeteer";
 
 import { EXPECTED_POKELIKE_GAME_VERSION } from "./constants.js";
-import { logWarn } from "./logger.js";
-import { observe } from "./state/snapshot.js";
+import { logWarn } from "../logging/logger.js";
+import { observe } from "../state/snapshot.js";
 
 /** Extract semver from title screen copy such as "POKELIKE Pokemon Roguelike v1.3.1". */
 export function parseGameVersionFromTitleText(text: string): string | null {
@@ -29,7 +29,7 @@ export async function warnIfUnexpectedGameVersion(page: Page): Promise<void> {
       logWarn(
         `[pokelike-bot] Could not read game version from the title screen. ` +
           `This bot targets v${EXPECTED_POKELIKE_GAME_VERSION}; if the game updated, check for breaking changes ` +
-          `(changelog, UI selectors) and update EXPECTED_POKELIKE_GAME_VERSION in src/constants.ts after testing.`,
+          `(changelog, UI selectors) and update EXPECTED_POKELIKE_GAME_VERSION in src/utility/constants.ts after testing.`,
       );
       return;
     }

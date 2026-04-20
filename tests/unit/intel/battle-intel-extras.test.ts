@@ -16,7 +16,7 @@ import {
   type NodeIntel,
   type ScoreCandidateContext,
   type TeamMemberBrief,
-} from "../../src/battle-intel.ts";
+} from "../../../src/intel/battle-intel.ts";
 
 const ctx3: IntelContext = { currentMap: 3, eliteIndex: 0 };
 

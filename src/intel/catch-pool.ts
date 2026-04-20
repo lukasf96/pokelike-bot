@@ -3,7 +3,7 @@
  * MAP_LEVEL_RANGES, LEGENDARY_IDS for getCatchChoices(mapIndex).
  */
 
-import { GEN1_SPECIES_BST } from "./data/gen1-species.js";
+import { GEN1_SPECIES_BST } from "../data/gen1-species.js";
 
 export const LEGENDARY_IDS: ReadonlySet<number> = new Set([144, 145, 146, 150, 151]);
 

@@ -1,8 +1,8 @@
 import type { Handler } from "../state/handler.js";
-import { logAction } from "../logger.js";
-import { sleep } from "../page-utils.js";
-import { scoreCatchCandidate } from "../catch-intel.js";
-import { recordCatch } from "../run-detail-log.js";
+import { logAction } from "../logging/logger.js";
+import { sleep } from "../utility/page-utils.js";
+import { scoreCatchCandidate } from "../intel/catch-intel.js";
+import { recordCatch } from "../logging/run-detail-log.js";
 
 export const handleCatch: Handler = async (tick, { page }) => {
   const options = tick.ui.catch?.options ?? [];

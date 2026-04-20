@@ -6,7 +6,7 @@ import {
   estimateBattleWinProbability,
   normalizeSimTeam,
 } from "../../../src/sim/win-probability.ts";
-import type { NodeIntel } from "../../../src/battle-intel.ts";
+import type { NodeIntel } from "../../../src/intel/battle-intel.ts";
 
 const CTX = { currentMap: 0, eliteIndex: 0 };
 

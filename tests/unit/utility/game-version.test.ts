@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseGameVersionFromTitleText } from "../../src/game-version.ts";
+import { parseGameVersionFromTitleText } from "../../../src/utility/game-version.ts";
 
 describe("parseGameVersionFromTitleText", () => {
   it("parses the tagged form from the real title copy", () => {

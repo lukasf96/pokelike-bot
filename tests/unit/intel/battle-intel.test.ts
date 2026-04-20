@@ -7,7 +7,7 @@ import {
   computeTeamOrder,
   inferNodeIntel,
   typeEffectiveness,
-} from "../../src/battle-intel.ts";
+} from "../../../src/intel/battle-intel.ts";
 
 describe("typeEffectiveness", () => {
   it("handles single-type defenders (Gen-1 chart)", () => {

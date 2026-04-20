@@ -4,10 +4,10 @@
  */
 
 import { catchBucketIdsForMap, LEGENDARY_SPECIES_IDS, maxLevelForMap } from "./catch-pool.js";
-import { TYPE_CHART } from "./data/type-chart.js";
-import { GEN1_SPECIES_TYPES } from "./data/gen1-species.js";
-import { minLevelForSpecies } from "./data/gen1-min-level.js";
-import { ELITE_ROSTERS, GYM_ROSTERS } from "./data/gym-elite-rosters.js";
+import { TYPE_CHART } from "../data/type-chart.js";
+import { GEN1_SPECIES_TYPES } from "../data/gen1-species.js";
+import { minLevelForSpecies } from "../data/gen1-min-level.js";
+import { ELITE_ROSTERS, GYM_ROSTERS } from "../data/gym-elite-rosters.js";
 
 /**
  * Lead level + roster max level for the upcoming boss (gym for currentMap≤7,

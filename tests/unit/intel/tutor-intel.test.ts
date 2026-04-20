@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { pickTutorSlot, type TutorTeamSlot } from "../../src/tutor-intel.ts";
+import { pickTutorSlot, type TutorTeamSlot } from "../../../src/intel/tutor-intel.ts";
 
 describe("pickTutorSlot", () => {
   it("returns null when every slot is already tutored (moveTier ≥ 2)", () => {

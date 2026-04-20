@@ -4,7 +4,7 @@
  */
 
 import { GEN1_EVOLUTIONS } from "../data/gen1-evolutions.js";
-import { typeEffectiveness } from "../battle-intel.js";
+import { typeEffectiveness } from "../intel/battle-intel.js";
 import { MOVE_POOL, type MovePoolKey } from "./game-move-pool.js";
 
 export interface SimBaseStats {

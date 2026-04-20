@@ -1,6 +1,6 @@
 import type { Handler } from "../state/handler.js";
-import { logAction } from "../logger.js";
-import { sleep } from "../page-utils.js";
+import { logAction } from "../logging/logger.js";
+import { sleep } from "../utility/page-utils.js";
 
 export const handleStarter: Handler = async (_tick, { page }) => {
   await page

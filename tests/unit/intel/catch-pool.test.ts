@@ -7,7 +7,7 @@ import {
   catchBucketIdsForMap,
   getMapLevelRange,
   maxLevelForMap,
-} from "../../src/catch-pool.ts";
+} from "../../../src/intel/catch-pool.ts";
 
 describe("getMapLevelRange / maxLevelForMap", () => {
   it("mirrors data.js MAP_LEVEL_RANGES for the canonical maps", () => {

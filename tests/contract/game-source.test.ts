@@ -11,10 +11,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import { EXPECTED_POKELIKE_GAME_VERSION } from "../../src/constants.ts";
+import { EXPECTED_POKELIKE_GAME_VERSION } from "../../src/utility/constants.ts";
 import { parseSpeciesIdFromSpriteUrl } from "../../src/state/parsers.ts";
-import { parseGameVersionFromTitleText } from "../../src/game-version.ts";
-import { deriveEliteIndex } from "../../src/run-log.ts";
+import { parseGameVersionFromTitleText } from "../../src/utility/game-version.ts";
+import { deriveEliteIndex } from "../../src/logging/run-log.ts";
 
 const SRC_ROOT = path.resolve("pokelike-source-files");
 const HTML_PATH = path.join(SRC_ROOT, "Pokemon Roguelike.html");

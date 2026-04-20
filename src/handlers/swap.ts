@@ -1,8 +1,8 @@
 import type { Handler } from "../state/handler.js";
-import { logAction } from "../logger.js";
-import { pickSwapReleaseSlot } from "../release-candidate-intel.js";
+import { logAction } from "../logging/logger.js";
+import { pickSwapReleaseSlot } from "../intel/release-candidate-intel.js";
 import { selectMoonStoneInBag, selectReleaseTeam } from "../state/selectors.js";
-import { sleep } from "../page-utils.js";
+import { sleep } from "../utility/page-utils.js";
 
 export const handleSwap: Handler = async (tick, { page }) => {
   if (!tick.game) {

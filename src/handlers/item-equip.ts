@@ -1,14 +1,14 @@
-import { enemyTypingsForIntel, type NodeIntel } from "../battle-intel.js";
+import { enemyTypingsForIntel, type NodeIntel } from "../intel/battle-intel.js";
 import type { Handler } from "../state/handler.js";
-import { logAction } from "../logger.js";
+import { logAction } from "../logging/logger.js";
 import {
   bestEmptySlotForHeldItem,
   bestPokemonIndexForHeldItem,
   type HeldItemFitnessCtx,
   itemNameToId,
-} from "../item-intel.js";
+} from "../intel/item-intel.js";
 import { selectItemTeam } from "../state/selectors.js";
-import { sleep } from "../page-utils.js";
+import { sleep } from "../utility/page-utils.js";
 
 export const handleItemEquip: Handler = async (tick, { page }) => {
   const modalSnap = tick.ui.itemEquip;

@@ -1,6 +1,6 @@
 import type { Handler } from "../state/handler.js";
-import { logAction } from "../logger.js";
-import { clickSel, sleep } from "../page-utils.js";
+import { logAction } from "../logging/logger.js";
+import { clickSel, sleep } from "../utility/page-utils.js";
 
 export const handleTrainer: Handler = async (_tick, { page }) => {
   logAction("trainer", "Selecting BOY");

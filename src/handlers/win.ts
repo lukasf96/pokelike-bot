@@ -1,6 +1,6 @@
 import type { Handler } from "../state/handler.js";
-import { logAction } from "../logger.js";
-import { clickSel, sleep } from "../page-utils.js";
+import { logAction } from "../logging/logger.js";
+import { clickSel, sleep } from "../utility/page-utils.js";
 
 /** Run-end emission is owned by `RunMachine`; this handler just advances the UI. */
 export const handleWin: Handler = async (_tick, { page }) => {

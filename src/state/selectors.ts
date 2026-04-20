@@ -7,10 +7,10 @@
  * Never mutate inputs.
  */
 
-import type { TeamMemberBrief } from "../battle-intel.js";
-import type { TeamMemberForItem } from "../item-intel.js";
-import type { ReleaseTeamMember } from "../release-candidate-intel.js";
-import type { TutorTeamSlot } from "../tutor-intel.js";
+import type { TeamMemberBrief } from "../intel/battle-intel.js";
+import type { TeamMemberForItem } from "../intel/item-intel.js";
+import type { ReleaseTeamMember } from "../intel/release-candidate-intel.js";
+import type { TutorTeamSlot } from "../intel/tutor-intel.js";
 import type { GameSnapshot, Pokemon } from "./types.js";
 
 export interface TeamHpSummary {

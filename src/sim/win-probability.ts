@@ -2,11 +2,11 @@
  * Monte Carlo win-rate estimate (A5) — mirrors game enemy construction + battle-sim.runBattle.
  */
 
-import { LEGENDARY_SPECIES_IDS, catchBucketIdsForMap, getMapLevelRange } from "../catch-pool.js";
+import { LEGENDARY_SPECIES_IDS, catchBucketIdsForMap, getMapLevelRange } from "../intel/catch-pool.js";
 import { GEN1_BASE_STATS, type Gen1BaseStatsRow } from "../data/gen1-base-stats.js";
 import { ELITE_ROSTERS, GYM_ROSTERS, type BossSlotDef } from "../data/gym-elite-rosters.js";
 import { GEN1_SPECIES_TYPES } from "../data/gen1-species.js";
-import { type NodeIntel, eligibleTrainerSpeciesIds } from "../battle-intel.js";
+import { type NodeIntel, eligibleTrainerSpeciesIds } from "../intel/battle-intel.js";
 import { calcHp, getMoveTierForMap, runBattle, type SimPokemon } from "./battle-sim.js";
 
 const DEFAULT_SAMPLES = 56;

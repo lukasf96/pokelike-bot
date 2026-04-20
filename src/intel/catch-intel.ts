@@ -3,8 +3,8 @@
  * Replaces the binary STRONG_POKEMON allow-list with a coverage-aware BST formula.
  */
 
-import { GEN1_SPECIES_BST, GEN1_SPECIES_TYPES } from "./data/gen1-species.js";
-import { GEN1_EVOLUTIONS, CROSS_SPECIES_EVOLUTION_BST } from "./data/gen1-evolutions.js";
+import { GEN1_SPECIES_BST, GEN1_SPECIES_TYPES } from "../data/gen1-species.js";
+import { GEN1_EVOLUTIONS, CROSS_SPECIES_EVOLUTION_BST } from "../data/gen1-evolutions.js";
 import { typeEffectiveness, attackingStabTypes } from "./battle-intel.js";
 
 /**

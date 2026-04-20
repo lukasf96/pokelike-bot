@@ -14,7 +14,7 @@
 
 import type { Page } from "puppeteer";
 
-import { POKE_CURRENT_RUN_LS_KEY } from "../constants.js";
+import { POKE_CURRENT_RUN_LS_KEY } from "../utility/constants.js";
 import type { GameSnapshot, PhaseKind, Tick, TickUi } from "./types.js";
 
 interface RawObservation {

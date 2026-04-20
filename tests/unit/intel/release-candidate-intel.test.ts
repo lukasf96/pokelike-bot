@@ -10,7 +10,7 @@ import {
   slotPowerScore,
   tradeAdjustedGainForSlot,
   type ReleaseTeamMember,
-} from "../../src/release-candidate-intel.ts";
+} from "../../../src/intel/release-candidate-intel.ts";
 
 function member(over: Partial<ReleaseTeamMember> & Pick<ReleaseTeamMember, "speciesId" | "level">): ReleaseTeamMember {
   return {

@@ -1,6 +1,6 @@
 import type { Handler } from "../state/handler.js";
-import { logAction } from "../logger.js";
-import { sleep } from "../page-utils.js";
+import { logAction } from "../logging/logger.js";
+import { sleep } from "../utility/page-utils.js";
 
 /** Matches `EEVEE_EVOLUTIONS` render order in game `data.js`. */
 const EEVEE_CARD_LABELS = ["Flareon", "Vaporeon", "Jolteon"] as const;

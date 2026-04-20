@@ -4,16 +4,16 @@ import {
   attackingStabTypes,
   bossLevelStats,
   typeEffectiveness,
-} from "../battle-intel.js";
-import { BOSS_TYPES_BY_MAP } from "../catch-intel.js";
+} from "../intel/battle-intel.js";
+import { BOSS_TYPES_BY_MAP } from "../intel/catch-intel.js";
 import { CROSS_SPECIES_EVOLUTION_BST, GEN1_EVOLUTIONS } from "../data/gen1-evolutions.js";
-import { logAction } from "../logger.js";
+import { logAction } from "../logging/logger.js";
 import { GEN1_SPECIES_BST, GEN1_SPECIES_TYPES } from "../data/gen1-species.js";
-import type { TeamMemberForItem } from "../item-intel.js";
+import type { TeamMemberForItem } from "../intel/item-intel.js";
 import type { HandlerCtx } from "../state/handler.js";
 import { selectItemTeam } from "../state/selectors.js";
 import type { GameSnapshot, Tick } from "../state/types.js";
-import { sleep } from "../page-utils.js";
+import { sleep } from "../utility/page-utils.js";
 
 function speciesBaseStatTotal(speciesId: number): number | undefined {
   const base = GEN1_SPECIES_BST[speciesId];

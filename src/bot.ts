@@ -1,7 +1,7 @@
 import puppeteer, { type Browser, type Page } from "puppeteer";
 
-import { GAME_URL } from "./constants.js";
-import { warnIfUnexpectedGameVersion } from "./game-version.js";
+import { GAME_URL } from "./utility/constants.js";
+import { warnIfUnexpectedGameVersion } from "./utility/game-version.js";
 import {
   logAction,
   logError,
@@ -12,7 +12,7 @@ import {
   logStartupBanner,
   logTurnHeader,
   screenPeekLine,
-} from "./logger.js";
+} from "./logging/logger.js";
 import { handleBadge } from "./handlers/badge.js";
 import { handleBattle } from "./handlers/battle.js";
 import { handleCatch } from "./handlers/catch.js";
@@ -31,9 +31,9 @@ import { handleTrade } from "./handlers/trade.js";
 import { handleTrainer } from "./handlers/trainer.js";
 import { handleTransition } from "./handlers/transition.js";
 import { handleWin } from "./handlers/win.js";
-import { clickFirst, humanDelay, sleep } from "./page-utils.js";
-import { handleRunLogEvent } from "./run-log.js";
-import { setCurrentTurn } from "./run-detail-log.js";
+import { clickFirst, humanDelay, sleep } from "./utility/page-utils.js";
+import { handleRunLogEvent } from "./logging/run-log.js";
+import { setCurrentTurn } from "./logging/run-detail-log.js";
 import type { Handler, HandlerCtx } from "./state/handler.js";
 import { RunMachine, type RunEvent } from "./state/run-machine.js";
 import { observe } from "./state/snapshot.js";

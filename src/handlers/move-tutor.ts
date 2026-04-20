@@ -1,7 +1,7 @@
 import type { Handler } from "../state/handler.js";
-import { logAction } from "../logger.js";
-import { sleep } from "../page-utils.js";
-import { pickTutorSlot } from "../tutor-intel.js";
+import { logAction } from "../logging/logger.js";
+import { sleep } from "../utility/page-utils.js";
+import { pickTutorSlot } from "../intel/tutor-intel.js";
 import { selectTutorTeam } from "../state/selectors.js";
 
 export const handleMoveTutor: Handler = async (tick, { page }) => {
