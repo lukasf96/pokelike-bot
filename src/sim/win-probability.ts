@@ -242,30 +242,20 @@ export function estimateBattleWinProbability(
   let wins = 0;
   for (let i = 0; i < samples; i++) {
     const rng = mulberry32(seedBase ^ (i * 2654435761));
-    let enemies: SimPokemon[] = [];
-
-    switch (intel.category) {
-      case "gym":
-        enemies = buildGymEnemyTeam(intel.mapIndex);
-        break;
-      case "elite":
-        enemies = buildEliteEnemyTeam(intel.eliteIndex);
-        break;
-      case "wild":
-        enemies = sampleWildEnemyTripleThenPick(intel.mapIndex, rng);
-        break;
-      case "dynamic_trainer":
-        enemies = sampleDynamicTrainerEnemyTeam(intel.mapIndex, rng);
-        break;
-      case "trainer":
-        enemies = sampleTrainerEnemyTeam(ctx.currentMap, intel.key, rng);
-        break;
-      case "legendary":
-        enemies = sampleLegendaryEnemy(ctx.currentMap, rng, blockedLegendary);
-        break;
-      default:
-        enemies = [];
-    }
+    const enemies: SimPokemon[] =
+      intel.category === "gym"
+        ? buildGymEnemyTeam(intel.mapIndex)
+        : intel.category === "elite"
+          ? buildEliteEnemyTeam(intel.eliteIndex)
+          : intel.category === "wild"
+            ? sampleWildEnemyTripleThenPick(intel.mapIndex, rng)
+            : intel.category === "dynamic_trainer"
+              ? sampleDynamicTrainerEnemyTeam(intel.mapIndex, rng)
+              : intel.category === "trainer"
+                ? sampleTrainerEnemyTeam(ctx.currentMap, intel.key, rng)
+                : intel.category === "legendary"
+                  ? sampleLegendaryEnemy(ctx.currentMap, rng, blockedLegendary)
+                  : [];
 
     if (enemies.length === 0) {
       wins++;

@@ -13,7 +13,6 @@ import {
   shouldReorderForBattle,
   type IntelContext,
   type MapCandidateBrief,
-  type NodeIntel,
   type ScoreCandidateContext,
   type TeamMemberBrief,
 } from "../../../src/intel/battle-intel.ts";

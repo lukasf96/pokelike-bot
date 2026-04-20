@@ -177,21 +177,25 @@ export async function observe(page: Page, tickId: number, deps: ObserveDeps = {}
         const img = g.querySelector<SVGImageElement>("image");
         const hrefRaw = img?.getAttribute("href") ?? img?.getAttribute("xlink:href") ?? "";
 
-        let pathDecoded = hrefRaw;
-        try {
-          pathDecoded = decodeURIComponent(hrefRaw.split("?")[0] ?? "");
-        } catch {
-          pathDecoded = hrefRaw.split("?")[0] ?? "";
-        }
+        const pathDecoded = (() => {
+          const stripped = hrefRaw.split("?")[0] ?? "";
+          try {
+            return decodeURIComponent(stripped);
+          } catch {
+            return stripped;
+          }
+        })();
         const stemMatch = pathDecoded.match(/([^/]+)\.(png|gif|webp)$/i);
         const stem = (stemMatch?.[1] ?? "").replace(/%20/gi, " ").trim().toLowerCase();
 
-        let pathForIncludes = "";
-        try {
-          pathForIncludes = decodeURIComponent((hrefRaw || "").split("?")[0] ?? "").toLowerCase();
-        } catch {
-          pathForIncludes = ((hrefRaw || "").split("?")[0] ?? "").toLowerCase();
-        }
+        const pathForIncludes = (() => {
+          const stripped = (hrefRaw || "").split("?")[0] ?? "";
+          try {
+            return decodeURIComponent(stripped).toLowerCase();
+          } catch {
+            return stripped.toLowerCase();
+          }
+        })();
 
         const trainerStems = new Set([
           "acetrainer",
