@@ -3,11 +3,11 @@
  * data.js GYM_LEADERS / ELITE_4, getCatchChoices / MAP_BST_RANGES).
  */
 
-import { catchBucketIdsForMap, LEGENDARY_SPECIES_IDS, maxLevelForMap } from "./catch-pool.js";
-import { TYPE_CHART } from "../data/type-chart.js";
-import { GEN1_SPECIES_TYPES } from "../data/gen1-species.js";
 import { minLevelForSpecies } from "../data/gen1-min-level.js";
+import { GEN1_SPECIES_TYPES } from "../data/gen1-species.js";
 import { ELITE_ROSTERS, GYM_ROSTERS } from "../data/gym-elite-rosters.js";
+import { TYPE_CHART } from "../data/type-chart.js";
+import { catchBucketIdsForMap, LEGENDARY_SPECIES_IDS, maxLevelForMap } from "./catch-pool.js";
 
 /**
  * Lead level + roster max level for the upcoming boss (gym for currentMap≤7,
@@ -155,6 +155,30 @@ export interface TeamMemberBrief {
   isFainted?: boolean;
   /** Optional — used as a tie-break in lead ordering so under-levelled good-typing mons don't lead. */
   level?: number;
+  /** Optional — used by lead ordering to demote species whose only move is
+   *  non-damaging (Magikarp/Splash, Abra/Teleport). Leading one of these is a
+   *  free KO for the enemy. */
+  speciesId?: number;
+}
+
+/**
+ * Species whose entire move pool in `getBestMove` is a single 0-power
+ * `noDamage` move — Magikarp (Splash) and Abra (Teleport). Keep this in sync
+ * with the special-cases at the top of `src/sim/battle-sim.ts#getBestMove`.
+ *
+ * Leading one of these is effectively "skip your turn, take a free hit". The
+ * Monte Carlo sim already models this correctly on the attack side, but the
+ * team-order picker ranks on *type matchup* alone, so e.g. a Magikarp
+ * (Water-STAB on paper) will outrank a Rattata against a Fire lead. We catch
+ * that here by pushing these species behind any non-fainted alternative.
+ */
+const NO_DAMAGE_ONLY_SPECIES = new Set<number>([
+  129, // Magikarp — only Splash until it evolves into Gyarados (130)
+  63, // Abra — only Teleport until it evolves into Kadabra (64)
+]);
+
+export function hasOnlyNoDamageMove(speciesId: number | undefined): boolean {
+  return speciesId != null && NO_DAMAGE_ONLY_SPECIES.has(speciesId);
 }
 
 export type NodeIntel =
@@ -316,10 +340,7 @@ export function enemyTypingsForIntel(intel: NodeIntel, context: IntelContext): s
  * sequence is dramatically better than lead-only scoring on multi-mon gyms
  * (Sabrina, Blaine, Giovanni, E4) — see finding F-003.
  */
-export function enemySequenceForIntel(
-  intel: NodeIntel,
-  _context: IntelContext,
-): string[][] | null {
+export function enemySequenceForIntel(intel: NodeIntel, _context: IntelContext): string[][] | null {
   if (intel.category === "gym") {
     const mi = Math.min(Math.max(0, intel.mapIndex), GYM_TEAM_TYPES.length - 1);
     return GYM_TEAM_TYPES[mi] ?? null;
@@ -372,6 +393,11 @@ function leadScoreForTypes(p: TeamMemberBrief | undefined, leadEnemyTypes: strin
   // Fainted Pokémon would be auto-skipped by the engine on send-out, wasting
   // initiative. Push them firmly to the back of the order.
   if (p.isFainted) return -1e8;
+  // Magikarp (Splash) / Abra (Teleport): their only move deals 0 damage, so
+  // leading them just hands the enemy a free KO. Rank behind any damaging
+  // teammate but ahead of fainted ones (they can still eat a hit as a sac
+  // switch-in if literally nothing else is alive).
+  if (hasOnlyNoDamageMove(p.speciesId)) return -5e7;
   const stab = attackingStabTypes(p.types);
   let bestOff = 0;
   for (const st of stab) {

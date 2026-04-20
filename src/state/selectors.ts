@@ -56,6 +56,7 @@ export function selectTeamBrief(g: GameSnapshot): TeamMemberBrief[] {
     types: p.types,
     isFainted: p.hp.current <= 0,
     level: p.level,
+    speciesId: p.speciesId,
   }));
 }
 

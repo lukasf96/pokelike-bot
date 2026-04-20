@@ -85,6 +85,17 @@ describe("selectTeamBrief", () => {
     assert.equal(brief[0]!.isFainted, false);
     assert.equal(brief[1]!.isFainted, true);
   });
+
+  it("carries speciesId so lead ordering can demote Magikarp/Abra", () => {
+    const brief = selectTeamBrief(
+      snapshot({
+        team: [mon({ speciesId: 129 }), mon({ speciesId: 63 }), mon({ speciesId: 1 })],
+      }),
+    );
+    assert.equal(brief[0]!.speciesId, 129);
+    assert.equal(brief[1]!.speciesId, 63);
+    assert.equal(brief[2]!.speciesId, 1);
+  });
 });
 
 describe("bag selectors", () => {

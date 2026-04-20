@@ -1,5 +1,5 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 
 import {
   attackingStabTypes,
@@ -158,6 +158,41 @@ describe("computeTeamOrder", () => {
     const team = [{ types: ["Fire"] }, { types: ["Water"] }];
     assert.deepEqual(computeTeamOrder(team, []), [0, 1]);
   });
+
+  it("pushes Magikarp (Splash-only) behind damaging teammates even on paper-good matchups", () => {
+    // Magikarp is a paper-perfect lead into a Fire enemy (Water STAB), but
+    // its only move is Splash (0 power, noDamage). Leading it is a free KO.
+    const team = [
+      { types: ["Water"], level: 20, speciesId: 129 }, // Magikarp — Splash only
+      { types: ["Normal"], level: 20, speciesId: 19 }, // Rattata — has Tackle
+    ];
+    const order = computeTeamOrder(team, [["Fire"]]);
+    assert.equal(order[0], 1, `Magikarp must not lead vs Fire: ${order}`);
+    assert.equal(order[order.length - 1], 0);
+  });
+
+  it("pushes Abra (Teleport-only) behind damaging teammates", () => {
+    const team = [
+      { types: ["Psychic"], level: 20, speciesId: 63 }, // Abra — Teleport only
+      { types: ["Normal"], level: 10, speciesId: 19 }, // Rattata — damaging
+    ];
+    // Bug/Poison lead (e.g. Koga opener) — Psychic is SE on paper, but Abra
+    // can't actually hit it.
+    const order = computeTeamOrder(team, [["Bug", "Poison"]]);
+    assert.equal(order[0], 1, `Abra must not lead: ${order}`);
+  });
+
+  it("still leads Magikarp if every damaging teammate has fainted", () => {
+    // Last-mon scenario: Magikarp sits above fainted mons, so the engine
+    // sends it out rather than a dead slot.
+    const team = [
+      { types: ["Normal"], level: 20, speciesId: 19, isFainted: true },
+      { types: ["Water"], level: 20, speciesId: 129 }, // Magikarp
+    ];
+    const order = computeTeamOrder(team, [["Fire"]]);
+    assert.equal(order[0], 1);
+    assert.equal(order[order.length - 1], 0);
+  });
 });
 
 describe("enemySequenceForIntel", () => {
@@ -173,7 +208,10 @@ describe("enemySequenceForIntel", () => {
   });
 
   it("returns the ordered elite sequence for elite nodes", () => {
-    const seq = enemySequenceForIntel({ category: "elite", eliteIndex: 0 }, { ...ctx, currentMap: 8 });
+    const seq = enemySequenceForIntel(
+      { category: "elite", eliteIndex: 0 },
+      { ...ctx, currentMap: 8 },
+    );
     assert.ok(seq !== null);
     assert.equal(seq!.length, 5);
   });
@@ -181,10 +219,7 @@ describe("enemySequenceForIntel", () => {
   it("returns null for sampled-enemy categories", () => {
     assert.equal(enemySequenceForIntel({ category: "wild", mapIndex: 3 }, ctx), null);
     assert.equal(enemySequenceForIntel({ category: "trainer", key: "bugcatcher" }, ctx), null);
-    assert.equal(
-      enemySequenceForIntel({ category: "dynamic_trainer", mapIndex: 3 }, ctx),
-      null,
-    );
+    assert.equal(enemySequenceForIntel({ category: "dynamic_trainer", mapIndex: 3 }, ctx), null);
     assert.equal(enemySequenceForIntel({ category: "legendary" }, ctx), null);
     assert.equal(enemySequenceForIntel({ category: "neutral" }, ctx), null);
   });
@@ -228,8 +263,29 @@ describe("computeTeamOrderAssignment", () => {
     const sabrina = [["Psychic"], ["Bug", "Poison"]];
     const order = computeTeamOrderAssignment(team, sabrina);
     // Fainted mon must not be assigned to a front slot.
-    assert.ok(order.slice(0, 2).every((i) => i !== 0), `fainted mon leaked to front: ${order}`);
+    assert.ok(
+      order.slice(0, 2).every((i) => i !== 0),
+      `fainted mon leaked to front: ${order}`,
+    );
     assert.equal(order[order.length - 1], 0);
+  });
+
+  it("does not assign Magikarp/Abra to front slots when damaging teammates exist", () => {
+    // Fabricated opener sequence where Magikarp's Water STAB would score best
+    // on slot 0 and Abra's Psychic STAB on slot 1 — but neither can deal
+    // damage, so the assignment must send the damaging mons first.
+    const team = [
+      { types: ["Water"], level: 20, speciesId: 129 }, // Magikarp
+      { types: ["Psychic"], level: 20, speciesId: 63 }, // Abra
+      { types: ["Fire"], level: 20, speciesId: 4 }, // Charmander — damaging
+      { types: ["Normal"], level: 20, speciesId: 19 }, // Rattata — damaging
+    ];
+    const seq = [["Fire"], ["Fighting"]];
+    const order = computeTeamOrderAssignment(team, seq);
+    assert.ok(
+      order.slice(0, 2).every((i) => i !== 0 && i !== 1),
+      `Magikarp/Abra leaked to front slots: ${order}`,
+    );
   });
 
   it("is a no-op when the enemy sequence is empty", () => {
