@@ -91,20 +91,49 @@ function speciesFromRow(
   };
 }
 
+/**
+ * F-001: Boss slots carry authored baseStats mirroring data.js GYM_LEADERS /
+ * ELITE_4. The real game's `getEffectiveStat` applies the fallback
+ * `spdef ?? special` for these entries, so we materialize the same fallback
+ * here. Deriving stats from `GEN1_BASE_STATS` (PokeAPI, Gen-2+ split) would
+ * silently disagree with the game on any mon whose authored special differs
+ * from Gen-2+ Sp. Atk, and would also inflate/deflate Sp. Def systematically.
+ */
+function speciesFromBossSlot(slot: BossSlotDef, moveTier: number): SimPokemon {
+  const types = GEN1_SPECIES_TYPES[slot.speciesId] ?? ["Normal"];
+  const authored = slot.baseStats;
+  const baseStats: Gen1BaseStatsRow = {
+    hp: authored.hp,
+    atk: authored.atk,
+    def: authored.def,
+    special: authored.special,
+    spdef: authored.spdef ?? authored.special,
+    speed: authored.speed,
+  };
+  const mx = calcHp(baseStats.hp, slot.level);
+  return {
+    speciesId: slot.speciesId,
+    name: `Species${slot.speciesId}`,
+    level: slot.level,
+    currentHp: mx,
+    maxHp: mx,
+    types: [...types],
+    baseStats,
+    heldItem: slot.heldItemId ? { id: slot.heldItemId } : null,
+    moveTier,
+  };
+}
+
 function buildGymEnemyTeam(mapIndex: number): SimPokemon[] {
   const idx = Math.min(Math.max(0, mapIndex), GYM_ROSTERS.length - 1);
   const gym = GYM_ROSTERS[idx]!;
-  return gym.team.map((slot) =>
-    speciesFromRow(slot.speciesId, slot.level, gym.moveTier, slot.heldItemId),
-  );
+  return gym.team.map((slot) => speciesFromBossSlot(slot, gym.moveTier));
 }
 
 function buildEliteEnemyTeam(eliteIndex: number): SimPokemon[] {
   const idx = Math.min(Math.max(0, eliteIndex), ELITE_ROSTERS.length - 1);
   const roster = ELITE_ROSTERS[idx]!;
-  return roster.team.map((slot: BossSlotDef) =>
-    speciesFromRow(slot.speciesId, slot.level, 2, slot.heldItemId),
-  );
+  return roster.team.map((slot: BossSlotDef) => speciesFromBossSlot(slot, 2));
 }
 
 function sampleTrainerEnemyTeam(

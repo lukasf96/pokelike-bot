@@ -4,9 +4,9 @@
  * sim feeds those rosters directly, so any drift silently corrupts pWinBoss.
  *
  * We parse data.js with a lightweight regex extractor rather than evaling it
- * (eval'ing the game file would pull in missing globals). The parser only
- * looks at the species/level/heldItem triple for each entry — the smallest
- * surface we actually depend on.
+ * (eval'ing the game file would pull in missing globals). The parser pulls
+ * speciesId / level / heldItem.id / baseStats for each entry — the surface
+ * `win-probability.ts` feeds into `runBattle`.
  */
 
 import { describe, it } from "node:test";
@@ -18,10 +18,20 @@ import { ELITE_ROSTERS, GYM_ROSTERS } from "../../src/data/gym-elite-rosters.ts"
 
 const DATA_JS = path.resolve("pokelike-source-files", "Pokemon Roguelike_files", "data.js");
 
+interface ParsedBaseStats {
+  hp: number;
+  atk: number;
+  def: number;
+  speed: number;
+  special: number;
+  spdef?: number;
+}
+
 interface ParsedSlot {
   speciesId: number;
   level: number;
   heldItemId: string | null;
+  baseStats: ParsedBaseStats;
 }
 
 interface ParsedRoster {
@@ -85,11 +95,34 @@ function parseRosters(src: string, arrayName: string): ParsedRoster[] {
       const speciesId = Number(t.match(/speciesId:\s*(\d+)/)?.[1] ?? 0);
       const level = Number(t.match(/\blevel:\s*(\d+)/)?.[1] ?? 0);
       const heldItemId = t.match(/heldItem:\s*\{\s*id:\s*'([^']+)'/)?.[1] ?? null;
-      return { speciesId, level, heldItemId };
+      const baseStats = parseBaseStats(t);
+      return { speciesId, level, heldItemId, baseStats };
     });
 
     return { name, team: slots };
   });
+}
+
+/** Pull a numeric stat from a `baseStats: { ... }` literal in data.js. */
+function parseBaseStats(slotText: string): ParsedBaseStats {
+  const bsMatch = slotText.match(/baseStats:\s*\{([^}]*)\}/);
+  assert.ok(bsMatch, `slot is missing baseStats: ${slotText.slice(0, 80)}`);
+  const body = bsMatch[1]!;
+  const num = (key: string): number => {
+    const m = new RegExp(`\\b${key}\\s*:\\s*(\\d+)`).exec(body);
+    assert.ok(m, `baseStats missing ${key}: ${body}`);
+    return Number(m[1]);
+  };
+  const spdefMatch = /\bspdef\s*:\s*(\d+)/.exec(body);
+  const out: ParsedBaseStats = {
+    hp: num("hp"),
+    atk: num("atk"),
+    def: num("def"),
+    speed: num("speed"),
+    special: num("special"),
+  };
+  if (spdefMatch) out.spdef = Number(spdefMatch[1]);
+  return out;
 }
 
 function findMatchingBracket(src: string, open: number): number {
@@ -125,6 +158,7 @@ describe("GYM_ROSTERS mirrors data.js GYM_LEADERS", () => {
         assert.equal(ours[s]!.speciesId, theirs[s]!.speciesId, `gym #${i} slot ${s} speciesId`);
         assert.equal(ours[s]!.level, theirs[s]!.level, `gym #${i} slot ${s} level`);
         assert.equal(ours[s]!.heldItemId, theirs[s]!.heldItemId, `gym #${i} slot ${s} heldItem`);
+        assertBaseStatsMatch(ours[s]!.baseStats, theirs[s]!.baseStats, `gym #${i} slot ${s}`);
       }
     });
   }
@@ -147,7 +181,30 @@ describe("ELITE_ROSTERS mirrors data.js ELITE_4", () => {
         assert.equal(ours[s]!.speciesId, theirs[s]!.speciesId, `elite #${i} slot ${s} speciesId`);
         assert.equal(ours[s]!.level, theirs[s]!.level, `elite #${i} slot ${s} level`);
         assert.equal(ours[s]!.heldItemId, theirs[s]!.heldItemId, `elite #${i} slot ${s} heldItem`);
+        assertBaseStatsMatch(ours[s]!.baseStats, theirs[s]!.baseStats, `elite #${i} slot ${s}`);
       }
     });
   }
 });
+
+/**
+ * Assert that every authored stat matches. We intentionally do NOT require
+ * `spdef` to be present in either side — data.js almost never authors it, and
+ * our mirror omits it when absent (the sim applies `spdef ?? special` at run
+ * time, matching game `battle.js getEffectiveStat`). When both sides do
+ * author spdef explicitly, they must agree.
+ */
+function assertBaseStatsMatch(
+  ours: { hp: number; atk: number; def: number; speed: number; special: number; spdef?: number },
+  theirs: ParsedBaseStats,
+  ctx: string,
+): void {
+  assert.equal(ours.hp, theirs.hp, `${ctx} hp`);
+  assert.equal(ours.atk, theirs.atk, `${ctx} atk`);
+  assert.equal(ours.def, theirs.def, `${ctx} def`);
+  assert.equal(ours.speed, theirs.speed, `${ctx} speed`);
+  assert.equal(ours.special, theirs.special, `${ctx} special`);
+  if (theirs.spdef !== undefined || ours.spdef !== undefined) {
+    assert.equal(ours.spdef, theirs.spdef, `${ctx} spdef`);
+  }
+}

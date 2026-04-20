@@ -214,6 +214,50 @@ describe("heldItemFitnessAtSlot", () => {
       `boss-context fitness ${vsMisty} should exceed neutral ${neutral}`,
     );
   });
+
+  // F-002 regression: `bst()` must include spdef so that item-intel stays in
+  // sync with catch-intel's GEN1_SPECIES_BST (which is a 6-stat sum). We drive
+  // the invariant through leftovers, whose fitness is `hp * bst(p)` — any
+  // difference in spdef between two otherwise-identical mons must surface as
+  // `hp * delta` in the score.
+  it("bst() includes spdef (leftovers fitness reflects spdef delta)", () => {
+    const withSpdef: TeamMemberForItem[] = [
+      mon({
+        speciesId: 121,
+        level: 30,
+        types: ["Water", "Psychic"],
+        baseStats: { hp: 60, atk: 75, def: 85, special: 100, spdef: 85, speed: 115 },
+      }),
+    ];
+    const withoutSpdef: TeamMemberForItem[] = [
+      mon({
+        speciesId: 121,
+        level: 30,
+        types: ["Water", "Psychic"],
+        baseStats: { hp: 60, atk: 75, def: 85, special: 100, spdef: 0, speed: 115 },
+      }),
+    ];
+    const a = heldItemFitnessAtSlot("leftovers", 0, withSpdef);
+    const b = heldItemFitnessAtSlot("leftovers", 0, withoutSpdef);
+    // hp=60, spdef delta = 85 ⇒ expected score delta = 60 * 85 = 5100.
+    assert.equal(a - b, 60 * 85);
+  });
+
+  it("bst() equals the 6-stat sum from data.js (Starmie=520)", () => {
+    // data.js `bst = Object.values(baseStats).reduce((a,b)=>a+b,0)` — all six.
+    // Starmie authored stats (Gen-2+ split, consistent with PokeAPI mirror):
+    //   hp 60, atk 75, def 85, special 100, spdef 85, speed 115 → 520.
+    const team: TeamMemberForItem[] = [
+      mon({
+        speciesId: 121,
+        level: 1,
+        types: ["Water", "Psychic"],
+        baseStats: { hp: 60, atk: 75, def: 85, special: 100, spdef: 85, speed: 115 },
+      }),
+    ];
+    // leftovers fitness = hp * bst ⇒ 60 * 520 = 31_200.
+    assert.equal(heldItemFitnessAtSlot("leftovers", 0, team), 60 * 520);
+  });
 });
 
 describe("optimalHeldItemPermutation", () => {

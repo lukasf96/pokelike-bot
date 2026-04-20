@@ -54,7 +54,16 @@ function capType(t: string): string {
 function bst(m: TeamMemberForItem): number {
   const b = m.baseStats;
   if (!b) return 320;
-  return (b.hp ?? 0) + (b.atk ?? 0) + (b.def ?? 0) + (b.speed ?? 0) + (b.special ?? 0);
+  // data.js computes bst = sum(baseStats). Must include spdef to stay in sync
+  // with catch-intel's `GEN1_SPECIES_BST` (which sums all six stats).
+  return (
+    (b.hp ?? 0) +
+    (b.atk ?? 0) +
+    (b.def ?? 0) +
+    (b.speed ?? 0) +
+    (b.special ?? 0) +
+    (b.spdef ?? 0)
+  );
 }
 
 function isPhysicalAttacker(m: TeamMemberForItem): boolean {
