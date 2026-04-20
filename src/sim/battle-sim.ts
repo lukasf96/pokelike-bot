@@ -86,9 +86,16 @@ export function getMoveTierForMap(mapIndex: number): number {
   return mapIndex <= 2 ? 0 : 1;
 }
 
-export function getBestMove(types: string[], baseStats: SimBaseStats | undefined, speciesId: number, moveTier = 1): SimMove {
-  if (speciesId === 129) return { name: "Splash", power: 0, type: "Normal", isSpecial: false, noDamage: true };
-  if (speciesId === 63) return { name: "Teleport", power: 0, type: "Normal", isSpecial: false, noDamage: true };
+export function getBestMove(
+  types: string[],
+  baseStats: SimBaseStats | undefined,
+  speciesId: number,
+  moveTier = 1,
+): SimMove {
+  if (speciesId === 129)
+    return { name: "Splash", power: 0, type: "Normal", isSpecial: false, noDamage: true };
+  if (speciesId === 63)
+    return { name: "Teleport", power: 0, type: "Normal", isSpecial: false, noDamage: true };
 
   const isSpecial = (baseStats?.special ?? 0) >= (baseStats?.atk ?? 0);
   const tier = Math.max(0, Math.min(2, moveTier ?? 1));
@@ -119,12 +126,16 @@ export function getEffectiveStat(
   const rawStat =
     stat === "spdef"
       ? (pokemon.baseStats.spdef ?? pokemon.baseStats.special ?? 50)
-      : (pokemon.baseStats[stat as keyof SimBaseStats] as number | undefined) ?? 50;
+      : ((pokemon.baseStats[stat as keyof SimBaseStats] as number | undefined) ?? 50);
   let val = rawStat || 50;
   val = Math.floor((val * pokemon.level) / 50) + 5;
 
-  const physicalCount = playerTeamOnly.filter((p) => (p.baseStats?.atk ?? 0) > (p.baseStats?.special ?? 0)).length;
-  const specialCount = playerTeamOnly.filter((p) => (p.baseStats?.special ?? 0) >= (p.baseStats?.atk ?? 0)).length;
+  const physicalCount = playerTeamOnly.filter(
+    (p) => (p.baseStats?.atk ?? 0) > (p.baseStats?.special ?? 0),
+  ).length;
+  const specialCount = playerTeamOnly.filter(
+    (p) => (p.baseStats?.special ?? 0) >= (p.baseStats?.atk ?? 0),
+  ).length;
   const allPhysical = playerTeamOnly.length > 0 && physicalCount >= 4;
   const allSpecial = playerTeamOnly.length > 0 && specialCount >= 4;
 
@@ -162,19 +173,29 @@ export function calcDamage(
 ): { damage: number; typeEff: number; moveType: string; crit: boolean } {
   const lvl = attacker.level;
   const isSpecial = (attacker.baseStats?.special ?? 0) >= (attacker.baseStats?.atk ?? 0);
-  const atk = getEffectiveStat(attacker, isSpecial ? "special" : "atk", attackerItems, playerTeamForMetronome);
-  const def = getEffectiveStat(defender, isSpecial ? "spdef" : "def", defenderItems, playerTeamForMetronome);
+  const atk = getEffectiveStat(
+    attacker,
+    isSpecial ? "special" : "atk",
+    attackerItems,
+    playerTeamForMetronome,
+  );
+  const def = getEffectiveStat(
+    defender,
+    isSpecial ? "spdef" : "def",
+    defenderItems,
+    playerTeamForMetronome,
+  );
   const power = move.power || 40;
   const moveType = move.type || "Normal";
 
   let damage = Math.floor(((2 * lvl) / 5 + 2) * ((power * atk) / def / 50) + 2);
 
-  const typeEff = move.typeless ? 1 : typeEffectiveness(moveType, defender.types.length ? defender.types : ["Normal"]);
+  const typeEff = move.typeless
+    ? 1
+    : typeEffectiveness(moveType, defender.types.length ? defender.types : ["Normal"]);
   damage = Math.floor(damage * typeEff);
 
-  if (
-    attacker.types?.some((t) => t.toLowerCase() === moveType.toLowerCase())
-  ) {
+  if (attacker.types?.some((t) => t.toLowerCase() === moveType.toLowerCase())) {
     damage = Math.floor(damage * 1.5);
   }
 
@@ -268,8 +289,18 @@ export function runBattle(
     const pSpeed = getEffectiveStat(pActive, "speed", pActiveItems, pTeam);
     const eSpeed = getEffectiveStat(eActive, "speed", eActiveItems, pTeam);
 
-    const pMove = getBestMove(pActive.types || ["Normal"], pActive.baseStats, pActive.speciesId, pActive.moveTier ?? 1);
-    const eMove = getBestMove(eActive.types || ["Normal"], eActive.baseStats, eActive.speciesId, eActive.moveTier ?? 1);
+    const pMove = getBestMove(
+      pActive.types || ["Normal"],
+      pActive.baseStats,
+      pActive.speciesId,
+      pActive.moveTier ?? 1,
+    );
+    const eMove = getBestMove(
+      eActive.types || ["Normal"],
+      eActive.baseStats,
+      eActive.speciesId,
+      eActive.moveTier ?? 1,
+    );
     const bothUseless = !!(pMove.noDamage && eMove.noDamage);
 
     const turns =
@@ -314,7 +345,12 @@ export function runBattle(
     for (const { attacker, aIdx, side, target, tIdx, tSide } of turns) {
       if (attacker.currentHp <= 0 || target.currentHp <= 0) continue;
 
-      let move = getBestMove(attacker.types || ["Normal"], attacker.baseStats, attacker.speciesId, attacker.moveTier ?? 1);
+      let move = getBestMove(
+        attacker.types || ["Normal"],
+        attacker.baseStats,
+        attacker.speciesId,
+        attacker.moveTier ?? 1,
+      );
       if (bothUseless) {
         move = { name: "Struggle", power: 50, type: "Normal", isSpecial: false, typeless: true };
       }
@@ -327,7 +363,15 @@ export function runBattle(
 
       if (move.noDamage) continue;
 
-      const { damage } = calcDamage(attacker, target, move, attackerItems, defenderItems, pTeam, rng);
+      const { damage } = calcDamage(
+        attacker,
+        target,
+        move,
+        attackerItems,
+        defenderItems,
+        pTeam,
+        rng,
+      );
 
       const targetPreHp = target.currentHp;
       target.currentHp = Math.max(0, target.currentHp - damage);

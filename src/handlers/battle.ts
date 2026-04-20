@@ -12,10 +12,13 @@ export const handleBattle: Handler = async (tick, { page }) => {
     logAction("battle", "Clicking Skip");
     await clickSel(page, "#btn-auto-battle");
     await page
-      .waitForFunction((): boolean => {
-        const btn = document.getElementById("btn-continue-battle") as HTMLButtonElement | null;
-        return btn !== null && btn.style.display !== "none";
-      }, { timeout: 20000 })
+      .waitForFunction(
+        (): boolean => {
+          const btn = document.getElementById("btn-continue-battle") as HTMLButtonElement | null;
+          return btn !== null && btn.style.display !== "none";
+        },
+        { timeout: 20000 },
+      )
       .catch(() => {});
     await sleep(300);
   }

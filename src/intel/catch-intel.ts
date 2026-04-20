@@ -13,13 +13,13 @@ import { typeEffectiveness, attackingStabTypes } from "./battle-intel.js";
  */
 /** Boss typings for maps 0–8; shared with release/trade candidate logic. */
 export const BOSS_TYPES_BY_MAP: readonly string[][] = [
-  ["Rock", "Ground"],         // Map 0 – Brock
-  ["Water", "Psychic"],       // Map 1 – Misty
-  ["Electric"],               // Map 2 – Lt. Surge
-  ["Grass", "Poison"],        // Map 3 – Erika
-  ["Poison"],                 // Map 4 – Koga
-  ["Psychic", "Bug"],         // Map 5 – Sabrina
-  ["Fire"],                   // Map 6 – Blaine
+  ["Rock", "Ground"], // Map 0 – Brock
+  ["Water", "Psychic"], // Map 1 – Misty
+  ["Electric"], // Map 2 – Lt. Surge
+  ["Grass", "Poison"], // Map 3 – Erika
+  ["Poison"], // Map 4 – Koga
+  ["Psychic", "Bug"], // Map 5 – Sabrina
+  ["Fire"], // Map 6 – Blaine
   ["Ground", "Poison", "Rock"], // Map 7 – Giovanni
   ["Water", "Ice", "Rock", "Fighting", "Ghost", "Dragon", "Normal", "Psychic", "Fire", "Flying"],
   // Map 8 – Elite Four (all types present)
@@ -32,14 +32,14 @@ export const BOSS_TYPES_BY_MAP: readonly string[][] = [
  */
 const NEXT_BOSS_LEAD_TYPES: readonly string[][] = [
   ["Rock", "Ground"], // Brock — Geodude
-  ["Water"],          // Misty — Staryu
-  ["Electric"],       // Lt. Surge — Pikachu
-  ["Grass"],          // Erika — Tangela
-  ["Poison"],         // Koga — Koffing
-  ["Psychic"],        // Sabrina — Mr. Mime
-  ["Fire"],           // Blaine — Ponyta
-  ["Ground"],         // Giovanni — Dugtrio
-  ["Water", "Ice"],   // Lorelei — Dewgong
+  ["Water"], // Misty — Staryu
+  ["Electric"], // Lt. Surge — Pikachu
+  ["Grass"], // Erika — Tangela
+  ["Poison"], // Koga — Koffing
+  ["Psychic"], // Sabrina — Mr. Mime
+  ["Fire"], // Blaine — Ponyta
+  ["Ground"], // Giovanni — Dugtrio
+  ["Water", "Ice"], // Lorelei — Dewgong
 ];
 
 /** Late-game carry types that score a large bonus on Maps 6–8. */
@@ -140,11 +140,11 @@ export function scoreCatchCandidate(
   // Evolution tier bonuses / penalties
   const steps = stepsToFinalEvo(speciesId);
   if (steps === 0) {
-    score += 40;   // final evolution — most future fights using full power
+    score += 40; // final evolution — most future fights using full power
   } else if (steps === 1) {
-    score += 20;   // one step from final
+    score += 20; // one step from final
   } else {
-    score -= 15;   // base form far from final
+    score -= 15; // base form far from final
   }
 
   const covered = coveredAttackTypes(teamTypes);

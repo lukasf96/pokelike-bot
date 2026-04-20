@@ -25,13 +25,21 @@ export const TYPE_BOOST_ATTACK_TYPE: Record<string, string> = {
 
 /** data.js GEN1_EVOLUTIONS keys + 133 (Eevee) — mirror canEvolve() */
 const CAN_EVOLVE_SPECIES = new Set<number>([
-  1, 2, 4, 5, 7, 8, 10, 11, 13, 14, 16, 17, 19, 21, 23, 27, 29, 30, 32, 33, 35, 37, 39, 41, 43, 44, 46, 48, 50, 52, 54, 56, 58, 60, 61, 63, 64, 66, 67, 69, 70, 72, 74, 75, 77, 79, 81, 84, 86, 88, 90, 92, 93, 95, 96, 98, 100, 102, 104, 109, 111, 116, 118, 120, 123, 129, 138, 140, 147, 148,
-  133,
+  1, 2, 4, 5, 7, 8, 10, 11, 13, 14, 16, 17, 19, 21, 23, 27, 29, 30, 32, 33, 35, 37, 39, 41, 43, 44,
+  46, 48, 50, 52, 54, 56, 58, 60, 61, 63, 64, 66, 67, 69, 70, 72, 74, 75, 77, 79, 81, 84, 86, 88,
+  90, 92, 93, 95, 96, 98, 100, 102, 104, 109, 111, 116, 118, 120, 123, 129, 138, 140, 147, 148, 133,
 ]);
 
 export interface TeamMemberForItem {
   types: string[];
-  baseStats?: { hp?: number; atk?: number; def?: number; speed?: number; special?: number; spdef?: number };
+  baseStats?: {
+    hp?: number;
+    atk?: number;
+    def?: number;
+    speed?: number;
+    special?: number;
+    spdef?: number;
+  };
   level: number;
   speciesId: number;
   currentHp?: number;
@@ -273,7 +281,14 @@ const MIN_HELD_PERM_IMPROVE = 6;
 export function optimalHeldItemPermutation(
   team: TeamMemberForItem[],
   ctx?: HeldItemFitnessCtx,
-): { slots: number[]; itemIds: string[]; bestPerm: number[]; before: number; after: number; gain: number } | null {
+): {
+  slots: number[];
+  itemIds: string[];
+  bestPerm: number[];
+  before: number;
+  after: number;
+  gain: number;
+} | null {
   const slots: number[] = [];
   const itemIds: string[] = [];
   for (let i = 0; i < team.length; i += 1) {
@@ -288,7 +303,8 @@ export function optimalHeldItemPermutation(
 
   const scorePerm = (perm: number[]): number =>
     perm.reduce(
-      (sum, srcIdx, slotPos) => sum + heldItemFitnessAtSlot(itemIds[srcIdx]!, slots[slotPos]!, team, ctx),
+      (sum, srcIdx, slotPos) =>
+        sum + heldItemFitnessAtSlot(itemIds[srcIdx]!, slots[slotPos]!, team, ctx),
       0,
     );
 
@@ -385,11 +401,16 @@ export function scoreItemPick(itemId: string, team: TeamMemberForItem[]): number
     score += Math.min(25, mx / 80);
   }
   if (itemId === "focus_sash" || itemId === "focus_band") {
-    const fragile = team.filter((p) => (p.baseStats?.def ?? 50) + (p.baseStats?.spdef ?? p.baseStats?.special ?? 50) < 180);
+    const fragile = team.filter(
+      (p) => (p.baseStats?.def ?? 50) + (p.baseStats?.spdef ?? p.baseStats?.special ?? 50) < 180,
+    );
     if (fragile.length > 0) score += 22;
   }
   if (itemId === "choice_scarf") {
-    const mx = team.reduce((m, p) => Math.max(m, (p.baseStats?.speed ?? 50) * Math.sqrt(p.level)), 0);
+    const mx = team.reduce(
+      (m, p) => Math.max(m, (p.baseStats?.speed ?? 50) * Math.sqrt(p.level)),
+      0,
+    );
     score += Math.min(35, mx / 28);
   }
   if (itemId === "expert_belt") {

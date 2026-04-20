@@ -41,21 +41,26 @@ export const handleItemEquip: Handler = async (tick, { page }) => {
     ? preferredIdx
     : (modalSnap.idxButtons[0] ?? -1);
 
-  const result = await page.evaluate((payload: { equipIdx: number }): string => {
-    const modal = document.getElementById("item-equip-modal");
-    if (!modal) return "no-modal";
+  const result = await page.evaluate(
+    (payload: { equipIdx: number }): string => {
+      const modal = document.getElementById("item-equip-modal");
+      if (!modal) return "no-modal";
 
-    if (payload.equipIdx >= 0) {
-      const btn = modal.querySelector<HTMLButtonElement>(`button[data-idx="${payload.equipIdx}"]`);
-      if (btn && !btn.classList.contains("equip-btn-unequip")) {
-        btn.click();
-        return `equipped → slot ${payload.equipIdx}`;
+      if (payload.equipIdx >= 0) {
+        const btn = modal.querySelector<HTMLButtonElement>(
+          `button[data-idx="${payload.equipIdx}"]`,
+        );
+        if (btn && !btn.classList.contains("equip-btn-unequip")) {
+          btn.click();
+          return `equipped → slot ${payload.equipIdx}`;
+        }
       }
-    }
 
-    modal.querySelector<HTMLButtonElement>("#btn-equip-to-bag")?.click();
-    return "kept in bag";
-  }, { equipIdx });
+      modal.querySelector<HTMLButtonElement>("#btn-equip-to-bag")?.click();
+      return "kept in bag";
+    },
+    { equipIdx },
+  );
 
   logAction("item-equip", `${result} (${modalSnap.itemName} → ${itemId})`);
   await sleep(600);

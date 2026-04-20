@@ -105,11 +105,7 @@ const ELITE_NAME_TO_INDEX: Record<string, number> = {
  * The battle subtitle ("Elite Four - Battle 3/4" / "Final Battle!") and the
  * boss name are the only live signals we have at defeat time.
  */
-export function deriveEliteIndex(
-  title: string,
-  subtitle: string,
-  fallback: number,
-): number {
+export function deriveEliteIndex(title: string, subtitle: string, fallback: number): number {
   const battleN = subtitle.match(/Battle\s+(\d+)\s*\/\s*4/i);
   if (battleN) return Math.max(0, Number(battleN[1]) - 1);
   if (/Final Battle/i.test(subtitle) || /^Champion:/i.test(title)) return 4;
@@ -190,9 +186,7 @@ export function handleRunLogEvent(event: RunEvent, tick: Tick, currentTurn: numb
   // deriveEliteIndex above. Only elite-kind defeats carry a trustworthy index;
   // everything else keeps reporting the (correct) map-level value.
   const eliteIndex =
-    defeatContext?.kind === "elite"
-      ? defeatContext.eliteIndex
-      : lastGame?.eliteIndex ?? null;
+    defeatContext?.kind === "elite" ? defeatContext.eliteIndex : (lastGame?.eliteIndex ?? null);
 
   appendRunLog({
     timestamp: new Date().toISOString(),

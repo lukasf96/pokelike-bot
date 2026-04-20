@@ -12,9 +12,19 @@ import {
   type TeamMemberForItem,
 } from "../../../src/intel/item-intel.ts";
 
-function mon(over: Partial<TeamMemberForItem> & Pick<TeamMemberForItem, "types" | "level" | "speciesId">): TeamMemberForItem {
+function mon(
+  over: Partial<TeamMemberForItem> & Pick<TeamMemberForItem, "types" | "level" | "speciesId">,
+): TeamMemberForItem {
   return {
-    baseStats: { hp: 60, atk: 60, def: 60, special: 60, spdef: 60, speed: 60, ...(over.baseStats ?? {}) },
+    baseStats: {
+      hp: 60,
+      atk: 60,
+      def: 60,
+      special: 60,
+      spdef: 60,
+      speed: 60,
+      ...(over.baseStats ?? {}),
+    },
     ...over,
   };
 }
@@ -39,15 +49,45 @@ describe("TYPE_BOOST_ATTACK_TYPE", () => {
 
 describe("scoreItemPick", () => {
   const allPhysicalTeam: TeamMemberForItem[] = [
-    mon({ speciesId: 4, level: 30, types: ["Fire"], baseStats: { hp: 60, atk: 95, def: 60, special: 60, speed: 60 } }),
-    mon({ speciesId: 57, level: 30, types: ["Fighting"], baseStats: { hp: 60, atk: 105, def: 60, special: 60, speed: 60 } }),
-    mon({ speciesId: 75, level: 30, types: ["Rock", "Ground"], baseStats: { hp: 55, atk: 95, def: 115, special: 45, speed: 35 } }),
-    mon({ speciesId: 128, level: 30, types: ["Normal"], baseStats: { hp: 75, atk: 100, def: 95, special: 40, speed: 110 } }),
+    mon({
+      speciesId: 4,
+      level: 30,
+      types: ["Fire"],
+      baseStats: { hp: 60, atk: 95, def: 60, special: 60, speed: 60 },
+    }),
+    mon({
+      speciesId: 57,
+      level: 30,
+      types: ["Fighting"],
+      baseStats: { hp: 60, atk: 105, def: 60, special: 60, speed: 60 },
+    }),
+    mon({
+      speciesId: 75,
+      level: 30,
+      types: ["Rock", "Ground"],
+      baseStats: { hp: 55, atk: 95, def: 115, special: 45, speed: 35 },
+    }),
+    mon({
+      speciesId: 128,
+      level: 30,
+      types: ["Normal"],
+      baseStats: { hp: 75, atk: 100, def: 95, special: 40, speed: 110 },
+    }),
   ];
 
   const mixedTeam: TeamMemberForItem[] = [
-    mon({ speciesId: 3, level: 30, types: ["Grass", "Poison"], baseStats: { hp: 80, atk: 82, def: 83, special: 100, speed: 80 } }),
-    mon({ speciesId: 25, level: 30, types: ["Electric"], baseStats: { hp: 35, atk: 55, def: 40, special: 50, speed: 90 } }),
+    mon({
+      speciesId: 3,
+      level: 30,
+      types: ["Grass", "Poison"],
+      baseStats: { hp: 80, atk: 82, def: 83, special: 100, speed: 80 },
+    }),
+    mon({
+      speciesId: 25,
+      level: 30,
+      types: ["Electric"],
+      baseStats: { hp: 35, atk: 55, def: 40, special: 50, speed: 90 },
+    }),
   ];
 
   it("gives lucky_egg a high base and life_orb a lower one", () => {
@@ -79,9 +119,24 @@ describe("scoreItemPick", () => {
 
 describe("bestPokemonIndexForHeldItem", () => {
   const team: TeamMemberForItem[] = [
-    mon({ speciesId: 1, level: 10, types: ["Grass", "Poison"], baseStats: { hp: 45, atk: 49, def: 49, special: 65, speed: 45 } }),
-    mon({ speciesId: 25, level: 10, types: ["Electric"], baseStats: { hp: 35, atk: 55, def: 40, special: 50, speed: 90 } }),
-    mon({ speciesId: 7, level: 10, types: ["Water"], baseStats: { hp: 44, atk: 48, def: 65, special: 50, speed: 43 } }),
+    mon({
+      speciesId: 1,
+      level: 10,
+      types: ["Grass", "Poison"],
+      baseStats: { hp: 45, atk: 49, def: 49, special: 65, speed: 45 },
+    }),
+    mon({
+      speciesId: 25,
+      level: 10,
+      types: ["Electric"],
+      baseStats: { hp: 35, atk: 55, def: 40, special: 50, speed: 90 },
+    }),
+    mon({
+      speciesId: 7,
+      level: 10,
+      types: ["Water"],
+      baseStats: { hp: 44, atk: 48, def: 65, special: 50, speed: 43 },
+    }),
   ];
 
   it("charcoal prefers a Fire STAB … but there isn't one, so picks a neutral holder", () => {
@@ -140,18 +195,24 @@ describe("heldItemFitnessAtSlot", () => {
     ];
     const venu = heldItemFitnessAtSlot("eviolite", 0, team);
     const bulb = heldItemFitnessAtSlot("eviolite", 1, team);
-    assert.ok(bulb > venu, `Bulbasaur (${bulb}) should fit eviolite better than Venusaur (${venu})`);
+    assert.ok(
+      bulb > venu,
+      `Bulbasaur (${bulb}) should fit eviolite better than Venusaur (${venu})`,
+    );
     assert.ok(venu < -100, `Venusaur eviolite score should be deeply negative, got ${venu}`);
   });
 
   it("type-boost items are amplified when they hit the next boss super-effectively", () => {
     // Misty = Water; Magnet → Electric → 2× Water.
-    const team: TeamMemberForItem[] = [
-      mon({ speciesId: 25, level: 15, types: ["Electric"] }),
-    ];
+    const team: TeamMemberForItem[] = [mon({ speciesId: 25, level: 15, types: ["Electric"] })];
     const neutral = heldItemFitnessAtSlot("magnet", 0, team);
-    const vsMisty = heldItemFitnessAtSlot("magnet", 0, team, { nextBossTypings: [["Water"], ["Water", "Psychic"]] });
-    assert.ok(vsMisty > neutral, `boss-context fitness ${vsMisty} should exceed neutral ${neutral}`);
+    const vsMisty = heldItemFitnessAtSlot("magnet", 0, team, {
+      nextBossTypings: [["Water"], ["Water", "Psychic"]],
+    });
+    assert.ok(
+      vsMisty > neutral,
+      `boss-context fitness ${vsMisty} should exceed neutral ${neutral}`,
+    );
   });
 });
 
@@ -166,8 +227,20 @@ describe("optimalHeldItemPermutation", () => {
 
   it("suggests swapping a mis-assigned type-boost pair", () => {
     const team: TeamMemberForItem[] = [
-      mon({ speciesId: 25, level: 25, types: ["Electric"], heldItem: { id: "miracle_seed" }, baseStats: { hp: 35, atk: 55, def: 40, special: 50, speed: 90 } }),
-      mon({ speciesId: 3, level: 25, types: ["Grass", "Poison"], heldItem: { id: "magnet" }, baseStats: { hp: 80, atk: 82, def: 83, special: 100, speed: 80 } }),
+      mon({
+        speciesId: 25,
+        level: 25,
+        types: ["Electric"],
+        heldItem: { id: "miracle_seed" },
+        baseStats: { hp: 35, atk: 55, def: 40, special: 50, speed: 90 },
+      }),
+      mon({
+        speciesId: 3,
+        level: 25,
+        types: ["Grass", "Poison"],
+        heldItem: { id: "magnet" },
+        baseStats: { hp: 80, atk: 82, def: 83, special: 100, speed: 80 },
+      }),
     ];
     const res = optimalHeldItemPermutation(team);
     assert.ok(res, "should suggest a swap");
@@ -178,8 +251,20 @@ describe("optimalHeldItemPermutation", () => {
 
   it("returns null when the current assignment is already optimal", () => {
     const team: TeamMemberForItem[] = [
-      mon({ speciesId: 25, level: 25, types: ["Electric"], heldItem: { id: "magnet" }, baseStats: { hp: 35, atk: 55, def: 40, special: 50, speed: 90 } }),
-      mon({ speciesId: 3, level: 25, types: ["Grass", "Poison"], heldItem: { id: "miracle_seed" }, baseStats: { hp: 80, atk: 82, def: 83, special: 100, speed: 80 } }),
+      mon({
+        speciesId: 25,
+        level: 25,
+        types: ["Electric"],
+        heldItem: { id: "magnet" },
+        baseStats: { hp: 35, atk: 55, def: 40, special: 50, speed: 90 },
+      }),
+      mon({
+        speciesId: 3,
+        level: 25,
+        types: ["Grass", "Poison"],
+        heldItem: { id: "miracle_seed" },
+        baseStats: { hp: 80, atk: 82, def: 83, special: 100, speed: 80 },
+      }),
     ];
     assert.equal(optimalHeldItemPermutation(team), null);
   });

@@ -120,12 +120,7 @@ export class RunMachine {
     }
 
     // ── Run start detection (re-entry into in-run after pre-run) ────────
-    if (
-      this._runEnded &&
-      prev !== null &&
-      !isInRun(prev.kind) &&
-      isInRun(cur.kind)
-    ) {
+    if (this._runEnded && prev !== null && !isInRun(prev.kind) && isInRun(cur.kind)) {
       this._runNumber += 1;
       this._turnNumber = 1;
       this._runEnded = false;

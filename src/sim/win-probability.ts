@@ -2,7 +2,11 @@
  * Monte Carlo win-rate estimate (A5) — mirrors game enemy construction + battle-sim.runBattle.
  */
 
-import { LEGENDARY_SPECIES_IDS, catchBucketIdsForMap, getMapLevelRange } from "../intel/catch-pool.js";
+import {
+  LEGENDARY_SPECIES_IDS,
+  catchBucketIdsForMap,
+  getMapLevelRange,
+} from "../intel/catch-pool.js";
 import { GEN1_BASE_STATS, type Gen1BaseStatsRow } from "../data/gen1-base-stats.js";
 import { ELITE_ROSTERS, GYM_ROSTERS, type BossSlotDef } from "../data/gym-elite-rosters.js";
 import { GEN1_SPECIES_TYPES } from "../data/gen1-species.js";
@@ -103,7 +107,11 @@ function buildEliteEnemyTeam(eliteIndex: number): SimPokemon[] {
   );
 }
 
-function sampleTrainerEnemyTeam(mapIndex: number, trainerKey: string, rng: () => number): SimPokemon[] {
+function sampleTrainerEnemyTeam(
+  mapIndex: number,
+  trainerKey: string,
+  rng: () => number,
+): SimPokemon[] {
   const level = sampleNodeLevel(mapIndex, rng);
   const moveTier = getMoveTierForMap(mapIndex);
   const size = trainerTeamSize(mapIndex);
@@ -233,7 +241,8 @@ export function estimateBattleWinProbability(
   if (playerTeam.length === 0) return 0;
 
   const samples = opts?.samples ?? DEFAULT_SAMPLES;
-  const seedBase = (opts?.seed ?? 0x9e3779b9) ^ (ctx.currentMap * 1315423911) ^ (ctx.eliteIndex * 715827881);
+  const seedBase =
+    (opts?.seed ?? 0x9e3779b9) ^ (ctx.currentMap * 1315423911) ^ (ctx.eliteIndex * 715827881);
 
   const blockedLegendary = new Set<number>(
     playerTeam.map((p) => p.speciesId).filter((id) => LEGENDARY_SPECIES_IDS.includes(id)),

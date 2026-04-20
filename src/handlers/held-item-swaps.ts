@@ -26,7 +26,11 @@ function bossItemCtx(game: GameSnapshot): HeldItemFitnessCtx {
 }
 
 /** Click `#item-bar` badge at `bagBadgeIdx` (same order as `state.items`), then Equip/Swap onto `slotIdx`. */
-async function equipBagHeldItemOntoSlot(page: Page, bagBadgeIdx: number, slotIdx: number): Promise<boolean> {
+async function equipBagHeldItemOntoSlot(
+  page: Page,
+  bagBadgeIdx: number,
+  slotIdx: number,
+): Promise<boolean> {
   const clicked = await page.evaluate((badgeIdx: number): boolean => {
     const bar = document.getElementById("item-bar");
     const badges = bar?.querySelectorAll(".item-badge");
@@ -56,7 +60,11 @@ async function equipBagHeldItemOntoSlot(page: Page, bagBadgeIdx: number, slotIdx
  * Click held item on team slot `teamIdxSource`, then Swap onto `teamIdxTarget`
  * (game `openItemEquipModal` + row button — exchanges both held items).
  */
-async function performOneHeldSwap(page: Page, teamIdxSource: number, teamIdxTarget: number): Promise<boolean> {
+async function performOneHeldSwap(
+  page: Page,
+  teamIdxSource: number,
+  teamIdxTarget: number,
+): Promise<boolean> {
   const opened = await page.evaluate((i: number): boolean => {
     const slots = document.querySelectorAll("#team-bar .team-slot");
     const itemEl = slots[i]?.querySelector<HTMLElement>(".team-slot-item");
@@ -85,7 +93,10 @@ async function performOneHeldSwap(page: Page, teamIdxSource: number, teamIdxTarg
  * After completing a map node we're back on the map: reshuffle held items among holders
  * when total `heldItemFitnessAtSlot` improves (see pokelike `openItemEquipModal` swap flow).
  */
-export async function maybeOptimizeHeldItemSwaps(initialTick: Tick, ctx: HandlerCtx): Promise<void> {
+export async function maybeOptimizeHeldItemSwaps(
+  initialTick: Tick,
+  ctx: HandlerCtx,
+): Promise<void> {
   if (!initialTick.game) return;
   const team = selectItemTeam(initialTick.game);
   const bossCtx = bossItemCtx(initialTick.game);

@@ -105,7 +105,7 @@ export async function observe(page: Page, tickId: number, deps: ObserveDeps = {}
         ? "move-tutor"
         : itemEquipOpen
           ? "item-equip"
-          : screenToPhase[activeScreen] ?? "unknown";
+          : (screenToPhase[activeScreen] ?? "unknown");
 
     // ── 2. Game snapshot from localStorage ───────────────────────────────
     let game: GameSnapshot | null = null;
@@ -114,7 +114,9 @@ export async function observe(page: Page, tickId: number, deps: ObserveDeps = {}
       if (raw) {
         const st = JSON.parse(raw) as Record<string, unknown>;
         const teamRaw = Array.isArray(st.team) ? (st.team as Array<Record<string, unknown>>) : [];
-        const itemsRaw = Array.isArray(st.items) ? (st.items as Array<Record<string, unknown>>) : [];
+        const itemsRaw = Array.isArray(st.items)
+          ? (st.items as Array<Record<string, unknown>>)
+          : [];
 
         const team = teamRaw.map((p) => {
           const held = p.heldItem as { id?: string } | null | undefined;
@@ -251,9 +253,7 @@ export async function observe(page: Page, tickId: number, deps: ObserveDeps = {}
     }
 
     if (phaseKind === "catch") {
-      const cards = Array.from(
-        document.querySelectorAll<HTMLElement>("#catch-choices .poke-card"),
-      );
+      const cards = Array.from(document.querySelectorAll<HTMLElement>("#catch-choices .poke-card"));
       const options = cards.map((c, i) => {
         const nameEl = c.querySelector<HTMLElement>(".poke-name");
         const name = nameEl?.textContent?.trim() ?? "?";
@@ -269,7 +269,9 @@ export async function observe(page: Page, tickId: number, deps: ObserveDeps = {}
         const speciesIdAttr = c.getAttribute("data-species-id") ?? c.getAttribute("data-id") ?? "";
         let speciesId = speciesIdAttr ? parseInt(speciesIdAttr, 10) : 0;
         if (!speciesId) {
-          const img = c.querySelector<HTMLImageElement>("img.poke-sprite, img[src*='/sprites/pokemon/']");
+          const img = c.querySelector<HTMLImageElement>(
+            "img.poke-sprite, img[src*='/sprites/pokemon/']",
+          );
           const src = img?.getAttribute("src") ?? "";
           const m = src.match(/\/sprites\/pokemon\/(?:shiny\/)?(\d+)\.png/i);
           if (m) speciesId = Number(m[1]);
@@ -295,9 +297,7 @@ export async function observe(page: Page, tickId: number, deps: ObserveDeps = {}
       if (modal) {
         const itemName =
           modal.querySelector<HTMLElement>(".equip-item-name")?.textContent?.trim() ?? "";
-        const idxButtons = Array.from(
-          modal.querySelectorAll<HTMLButtonElement>("button[data-idx]"),
-        )
+        const idxButtons = Array.from(modal.querySelectorAll<HTMLButtonElement>("button[data-idx]"))
           .filter((b) => !b.classList.contains("equip-btn-unequip"))
           .map((b) => parseInt(b.dataset.idx ?? "-1", 10))
           .filter((n) => Number.isFinite(n) && n >= 0);

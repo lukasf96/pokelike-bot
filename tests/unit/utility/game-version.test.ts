@@ -5,10 +5,7 @@ import { parseGameVersionFromTitleText } from "../../../src/utility/game-version
 
 describe("parseGameVersionFromTitleText", () => {
   it("parses the tagged form from the real title copy", () => {
-    assert.equal(
-      parseGameVersionFromTitleText("POKELIKE — Pokemon Roguelike v1.3.1"),
-      "1.3.1",
-    );
+    assert.equal(parseGameVersionFromTitleText("POKELIKE — Pokemon Roguelike v1.3.1"), "1.3.1");
   });
 
   it("parses two-part semvers (minor-only)", () => {
@@ -16,10 +13,7 @@ describe("parseGameVersionFromTitleText", () => {
   });
 
   it("falls back to loose vX.Y.Z anywhere in the text", () => {
-    assert.equal(
-      parseGameVersionFromTitleText("Welcome!  v0.12.3  — enjoy"),
-      "0.12.3",
-    );
+    assert.equal(parseGameVersionFromTitleText("Welcome!  v0.12.3  — enjoy"), "0.12.3");
   });
 
   it("returns null when no version is present", () => {

@@ -6,12 +6,8 @@ export const handleStarter: Handler = async (_tick, { page }) => {
   await page
     .waitForFunction(
       (): boolean => {
-        const cards = document.querySelectorAll<HTMLElement>(
-          "#starter-choices .poke-card",
-        );
-        return (
-          cards.length > 0 && (cards[0]?.getBoundingClientRect().width ?? 0) > 0
-        );
+        const cards = document.querySelectorAll<HTMLElement>("#starter-choices .poke-card");
+        return cards.length > 0 && (cards[0]?.getBoundingClientRect().width ?? 0) > 0;
       },
       { timeout: 5000 },
     )
@@ -24,17 +20,13 @@ export const handleStarter: Handler = async (_tick, { page }) => {
   //   - Charmander (Fire) is 0.5x vs both.
   // Fall back to any starter if Bulbasaur is missing for some reason.
   const picked = await page.evaluate((): string => {
-    const cards = Array.from(
-      document.querySelectorAll<HTMLElement>("#starter-choices .poke-card"),
-    );
+    const cards = Array.from(document.querySelectorAll<HTMLElement>("#starter-choices .poke-card"));
     const preferred = cards.find((c) => {
       const t = c.textContent?.toLowerCase() ?? "";
       return t.includes("bulbasaur");
     });
     const target = preferred ?? cards[0];
-    const name =
-      target?.querySelector<HTMLElement>(".poke-name")?.textContent?.trim() ??
-      "";
+    const name = target?.querySelector<HTMLElement>(".poke-name")?.textContent?.trim() ?? "";
     target?.click();
     return name;
   });

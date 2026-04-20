@@ -50,11 +50,7 @@ describe("selectTeamHp", () => {
 
   it("counts critical (<25%) and flags lowHp when ≥2 are critical", () => {
     const g = snapshot({
-      team: [
-        mon({ hp: { current: 5, max: 30 } }),
-        mon({ hp: { current: 5, max: 30 } }),
-        mon({}),
-      ],
+      team: [mon({ hp: { current: 5, max: 30 } }), mon({ hp: { current: 5, max: 30 } }), mon({})],
     });
     const s = selectTeamHp(g);
     assert.equal(s.critical, 2);

@@ -49,22 +49,22 @@ Each pure module in `src/` gets a companion under `tests/unit/`. These must be
 deterministic (inject `rng`, freeze seeds), fast (< 50 ms each), and side-effect
 free (no fs/network). Scope per file:
 
-| Module                   | What to cover                                                                                                                       |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `run-log.ts`             | `parseDefeatContext`, `deriveEliteIndex` — all defeat kinds; Elite 4 1–4/4 and "Final Battle"; name-fallback when subtitle is empty |
-| `state/parsers.ts`       | `parseSpeciesIdFromSpriteUrl` for normal / shiny / malformed URLs                                                                   |
-| `game-version.ts`        | `parseGameVersionFromTitleText` for tagged and loose version strings                                                                |
-| `catch-pool.ts`          | Bucket membership + legendary exclusion; `getMapLevelRange` bounds                                                                  |
-| `catch-intel.ts`         | Ordering invariants: counter beats BST; duplicate-STAB penalty; urgency when team has no counter; shiny bump                        |
-| `battle-intel.ts`        | Type chart, STAB selection, `inferNodeIntel` URL dispatch, lead reordering, `scoreCandidate` grind/tiny-team branches               |
-| `sim/battle-sim.ts`      | `calcHp` parity with game formula; `runBattle` determinism given same seed; STAB + type eff + held-item multipliers                |
-| `sim/win-probability.ts` | `estimateBattleWinProbability` seeded output stability; refusal thresholds in `adjustMapScoreWithWinProbability`                    |
-| `sim/game-move-pool.ts`  | Shape invariants: 17 types × 3 tiers × physical+special; non-decreasing power                                                       |
-| `item-intel.ts`          | `scoreItemPick` / `heldItemFitnessAtSlot` / `optimalHeldItemPermutation` (type-boost + eviolite + mis-assignment swap)              |
-| `release-candidate-intel.ts` | Protected-release rules; `redundancyReleaseBias` when STAB is fully resisted; `pickSwapReleaseSlot` fallback order              |
-| `tutor-intel.ts`         | Final-evo preference; BST×√level tiebreak; skip-if-tutored                                                                          |
-| `data/gen1-min-level.ts` | Evolution trigger levels (Ivysaur=16, Charizard=36, Mewtwo=55) match `data.js`                                                      |
-| `state/run-machine.ts`   | Run lifecycle: start/end/phase-changed, defeat fallback, `lastGame` preservation across team wipes                                  |
+| Module                       | What to cover                                                                                                                       |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `run-log.ts`                 | `parseDefeatContext`, `deriveEliteIndex` — all defeat kinds; Elite 4 1–4/4 and "Final Battle"; name-fallback when subtitle is empty |
+| `state/parsers.ts`           | `parseSpeciesIdFromSpriteUrl` for normal / shiny / malformed URLs                                                                   |
+| `game-version.ts`            | `parseGameVersionFromTitleText` for tagged and loose version strings                                                                |
+| `catch-pool.ts`              | Bucket membership + legendary exclusion; `getMapLevelRange` bounds                                                                  |
+| `catch-intel.ts`             | Ordering invariants: counter beats BST; duplicate-STAB penalty; urgency when team has no counter; shiny bump                        |
+| `battle-intel.ts`            | Type chart, STAB selection, `inferNodeIntel` URL dispatch, lead reordering, `scoreCandidate` grind/tiny-team branches               |
+| `sim/battle-sim.ts`          | `calcHp` parity with game formula; `runBattle` determinism given same seed; STAB + type eff + held-item multipliers                 |
+| `sim/win-probability.ts`     | `estimateBattleWinProbability` seeded output stability; refusal thresholds in `adjustMapScoreWithWinProbability`                    |
+| `sim/game-move-pool.ts`      | Shape invariants: 17 types × 3 tiers × physical+special; non-decreasing power                                                       |
+| `item-intel.ts`              | `scoreItemPick` / `heldItemFitnessAtSlot` / `optimalHeldItemPermutation` (type-boost + eviolite + mis-assignment swap)              |
+| `release-candidate-intel.ts` | Protected-release rules; `redundancyReleaseBias` when STAB is fully resisted; `pickSwapReleaseSlot` fallback order                  |
+| `tutor-intel.ts`             | Final-evo preference; BST×√level tiebreak; skip-if-tutored                                                                          |
+| `data/gen1-min-level.ts`     | Evolution trigger levels (Ivysaur=16, Charizard=36, Mewtwo=55) match `data.js`                                                      |
+| `state/run-machine.ts`       | Run lifecycle: start/end/phase-changed, defeat fallback, `lastGame` preservation across team wipes                                  |
 
 ### Contract tests
 
@@ -122,26 +122,26 @@ testable modules.
 Puppeteer-coupled modules are excluded from the coverage report (they require
 a live browser). Current status of the testable surface:
 
-| Module                          | Lines % | Funcs % |
-| ------------------------------- | ------: | ------: |
-| `battle-intel.ts`               |   87.28 |   78.79 |
-| `catch-intel.ts`                |  100.00 |   90.00 |
-| `catch-pool.ts`                 |   97.80 |  100.00 |
-| `item-intel.ts`                 |   81.53 |   70.97 |
-| `release-candidate-intel.ts`    |   98.29 |  100.00 |
-| `sim/battle-sim.ts`             |   91.91 |   96.67 |
-| `sim/game-move-pool.ts`         |  100.00 |  100.00 |
-| `sim/win-probability.ts`        |   80.11 |   64.00 |
-| `state/parsers.ts`              |  100.00 |  100.00 |
-| `state/run-machine.ts`          |  100.00 |  100.00 |
-| `state/selectors.ts`            |   86.36 |   66.67 |
-| `tutor-intel.ts`                |  100.00 |  100.00 |
-| `data/*` (all six tables)       |  100.00 |  100.00 |
-| **aggregate**                   |   **92.37** | **80.21** |
+| Module                       |   Lines % |   Funcs % |
+| ---------------------------- | --------: | --------: |
+| `battle-intel.ts`            |     87.28 |     78.79 |
+| `catch-intel.ts`             |    100.00 |     90.00 |
+| `catch-pool.ts`              |     97.80 |    100.00 |
+| `item-intel.ts`              |     81.53 |     70.97 |
+| `release-candidate-intel.ts` |     98.29 |    100.00 |
+| `sim/battle-sim.ts`          |     91.91 |     96.67 |
+| `sim/game-move-pool.ts`      |    100.00 |    100.00 |
+| `sim/win-probability.ts`     |     80.11 |     64.00 |
+| `state/parsers.ts`           |    100.00 |    100.00 |
+| `state/run-machine.ts`       |    100.00 |    100.00 |
+| `state/selectors.ts`         |     86.36 |     66.67 |
+| `tutor-intel.ts`             |    100.00 |    100.00 |
+| `data/*` (all six tables)    |    100.00 |    100.00 |
+| **aggregate**                | **92.37** | **80.21** |
 
 Functions still uncovered are mostly private helpers reached only via specific
 branches (`leadTypingsPoolForIntel` fallbacks, `game-version.ts` puppeteer
-wrapper, `run-log.ts` fs writes). Prioritize new tests on *behavioural*
+wrapper, `run-log.ts` fs writes). Prioritize new tests on _behavioural_
 branches before chasing the last few percent.
 
 ## What this suite _doesn't_ cover (yet)

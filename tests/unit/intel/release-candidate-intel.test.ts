@@ -12,7 +12,9 @@ import {
   type ReleaseTeamMember,
 } from "../../../src/intel/release-candidate-intel.ts";
 
-function member(over: Partial<ReleaseTeamMember> & Pick<ReleaseTeamMember, "speciesId" | "level">): ReleaseTeamMember {
+function member(
+  over: Partial<ReleaseTeamMember> & Pick<ReleaseTeamMember, "speciesId" | "level">,
+): ReleaseTeamMember {
   return {
     isShiny: false,
     heldItemId: null,
@@ -41,8 +43,12 @@ describe("slotPowerScore", () => {
 describe("isHardProtectedRelease", () => {
   it("protects shinies, lucky_egg / eviolite holders, and tutored mons", () => {
     assert.ok(isHardProtectedRelease(member({ speciesId: 1, level: 10, isShiny: true }), false));
-    assert.ok(isHardProtectedRelease(member({ speciesId: 1, level: 10, heldItemId: "lucky_egg" }), false));
-    assert.ok(isHardProtectedRelease(member({ speciesId: 1, level: 10, heldItemId: "eviolite" }), false));
+    assert.ok(
+      isHardProtectedRelease(member({ speciesId: 1, level: 10, heldItemId: "lucky_egg" }), false),
+    );
+    assert.ok(
+      isHardProtectedRelease(member({ speciesId: 1, level: 10, heldItemId: "eviolite" }), false),
+    );
     assert.ok(isHardProtectedRelease(member({ speciesId: 1, level: 10, moveTier: 2 }), false));
   });
 
@@ -89,7 +95,10 @@ describe("redundancyReleaseBias", () => {
       member({ speciesId: 16, level: 15 }), // Pidgey
     ];
     const bias = redundancyReleaseBias(team, 0, 6);
-    assert.ok(bias >= 300, `expected strong release bias for fully-resisted duplicate STAB, got ${bias}`);
+    assert.ok(
+      bias >= 300,
+      `expected strong release bias for fully-resisted duplicate STAB, got ${bias}`,
+    );
   });
 
   it("is zero for a unique STAB type (protected by coverage)", () => {

@@ -16,11 +16,7 @@ import path from "node:path";
 
 import { ELITE_ROSTERS, GYM_ROSTERS } from "../../src/data/gym-elite-rosters.ts";
 
-const DATA_JS = path.resolve(
-  "pokelike-source-files",
-  "Pokemon Roguelike_files",
-  "data.js",
-);
+const DATA_JS = path.resolve("pokelike-source-files", "Pokemon Roguelike_files", "data.js");
 
 interface ParsedSlot {
   speciesId: number;
@@ -128,11 +124,7 @@ describe("GYM_ROSTERS mirrors data.js GYM_LEADERS", () => {
       for (let s = 0; s < ours.length; s++) {
         assert.equal(ours[s]!.speciesId, theirs[s]!.speciesId, `gym #${i} slot ${s} speciesId`);
         assert.equal(ours[s]!.level, theirs[s]!.level, `gym #${i} slot ${s} level`);
-        assert.equal(
-          ours[s]!.heldItemId,
-          theirs[s]!.heldItemId,
-          `gym #${i} slot ${s} heldItem`,
-        );
+        assert.equal(ours[s]!.heldItemId, theirs[s]!.heldItemId, `gym #${i} slot ${s} heldItem`);
       }
     });
   }
@@ -154,11 +146,7 @@ describe("ELITE_ROSTERS mirrors data.js ELITE_4", () => {
       for (let s = 0; s < ours.length; s++) {
         assert.equal(ours[s]!.speciesId, theirs[s]!.speciesId, `elite #${i} slot ${s} speciesId`);
         assert.equal(ours[s]!.level, theirs[s]!.level, `elite #${i} slot ${s} level`);
-        assert.equal(
-          ours[s]!.heldItemId,
-          theirs[s]!.heldItemId,
-          `elite #${i} slot ${s} heldItem`,
-        );
+        assert.equal(ours[s]!.heldItemId, theirs[s]!.heldItemId, `elite #${i} slot ${s} heldItem`);
       }
     });
   }

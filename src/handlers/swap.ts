@@ -16,9 +16,7 @@ export const handleSwap: Handler = async (tick, { page }) => {
   const m = team[slot];
 
   const result = await page.evaluate((releaseIdx: number): string => {
-    const cards = Array.from(
-      document.querySelectorAll<HTMLElement>("#swap-choices .poke-card"),
-    );
+    const cards = Array.from(document.querySelectorAll<HTMLElement>("#swap-choices .poke-card"));
     if (cards.length === 0 || releaseIdx < 0 || releaseIdx >= cards.length) {
       (document.getElementById("btn-cancel-swap") as HTMLButtonElement | null)?.click();
       return "cancelled";

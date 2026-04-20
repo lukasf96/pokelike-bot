@@ -25,7 +25,10 @@ describe("scoreCatchCandidate", () => {
     const team = [["Normal"]];
     const bell = scoreCatchCandidate(69, 4, false, team, 1);
     const seel = scoreCatchCandidate(86, 4, false, team, 1);
-    assert.ok(bell > seel, `Bellsprout (${bell}) should beat Seel (${seel}) when team has no Misty counter`);
+    assert.ok(
+      bell > seel,
+      `Bellsprout (${bell}) should beat Seel (${seel}) when team has no Misty counter`,
+    );
   });
 
   it("prioritises the first SE counter when the team has none for the next boss", () => {
@@ -63,7 +66,10 @@ describe("scoreCatchCandidate", () => {
     const team: string[][] = [["Normal"]];
     const map5 = scoreCatchCandidate(25, 20, false, team, 5);
     const map6 = scoreCatchCandidate(25, 20, false, team, 6);
-    assert.ok(map6 > map5, `Electric STAB should score higher on map 6 (${map6}) than map 5 (${map5})`);
+    assert.ok(
+      map6 > map5,
+      `Electric STAB should score higher on map 6 (${map6}) than map 5 (${map5})`,
+    );
   });
 
   it("shiny bonus is stronger for high-BST species", () => {

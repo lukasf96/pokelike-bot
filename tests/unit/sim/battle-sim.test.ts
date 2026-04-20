@@ -73,23 +73,43 @@ describe("getMoveTierForMap", () => {
 
 describe("getBestMove", () => {
   it("returns the STAB type at the requested tier, honouring physical/special split", () => {
-    const physical = getBestMove(["Fire"], { hp: 50, atk: 100, def: 50, special: 40, speed: 60 }, 4, 1);
+    const physical = getBestMove(
+      ["Fire"],
+      { hp: 50, atk: 100, def: 50, special: 40, speed: 60 },
+      4,
+      1,
+    );
     assert.equal(physical.type, "Fire");
     assert.equal(physical.isSpecial, false);
     assert.equal(physical.name, "Fire Punch"); // Fire/physical tier 1
 
-    const special = getBestMove(["Fire"], { hp: 50, atk: 40, def: 50, special: 100, speed: 60 }, 4, 1);
+    const special = getBestMove(
+      ["Fire"],
+      { hp: 50, atk: 40, def: 50, special: 100, speed: 60 },
+      4,
+      1,
+    );
     assert.equal(special.isSpecial, true);
     assert.equal(special.name, "Flamethrower"); // Fire/special tier 1
   });
 
   it("drops Normal in favour of a dual-type secondary", () => {
-    const move = getBestMove(["Normal", "Flying"], { hp: 50, atk: 80, def: 50, special: 40, speed: 60 }, 16, 1);
+    const move = getBestMove(
+      ["Normal", "Flying"],
+      { hp: 50, atk: 80, def: 50, special: 40, speed: 60 },
+      16,
+      1,
+    );
     assert.equal(move.type, "Flying");
   });
 
   it("special-cases Geodude-line: always Rock STAB even when Ground is listed", () => {
-    const move = getBestMove(["Rock", "Ground"], { hp: 40, atk: 80, def: 100, special: 30, speed: 20 }, 74, 1);
+    const move = getBestMove(
+      ["Rock", "Ground"],
+      { hp: 40, atk: 80, def: 100, special: 30, speed: 20 },
+      74,
+      1,
+    );
     assert.equal(move.type, "Rock");
   });
 
@@ -101,7 +121,12 @@ describe("getBestMove", () => {
   });
 
   it("clamps out-of-range tiers", () => {
-    const move = getBestMove(["Water"], { hp: 50, atk: 40, def: 50, special: 100, speed: 60 }, 7, 99);
+    const move = getBestMove(
+      ["Water"],
+      { hp: 50, atk: 40, def: 50, special: 100, speed: 60 },
+      7,
+      99,
+    );
     assert.equal(move.type, "Water");
   });
 });
@@ -136,7 +161,11 @@ describe("getEffectiveStat", () => {
 
 describe("calcDamage", () => {
   it("applies STAB (1.5×) and type effectiveness (2×) multiplicatively", () => {
-    const attacker = makeMon({ types: ["Water"], baseStats: { hp: 50, atk: 50, def: 50, special: 100, speed: 60 }, level: 20 });
+    const attacker = makeMon({
+      types: ["Water"],
+      baseStats: { hp: 50, atk: 50, def: 50, special: 100, speed: 60 },
+      level: 20,
+    });
     const defenderFire = makeMon({ types: ["Fire"], level: 20 });
     const defenderWater = makeMon({ types: ["Water"], level: 20 });
     const move = getBestMove(attacker.types, attacker.baseStats, attacker.speciesId, 1);
@@ -157,10 +186,21 @@ describe("calcDamage", () => {
   });
 
   it("returns 0 damage for immunity (Normal → Ghost)", () => {
-    const attacker = makeMon({ types: ["Normal"], baseStats: { hp: 50, atk: 100, def: 50, special: 50, speed: 60 } });
+    const attacker = makeMon({
+      types: ["Normal"],
+      baseStats: { hp: 50, atk: 100, def: 50, special: 50, speed: 60 },
+    });
     const defender = makeMon({ types: ["Ghost"] });
     const move = getBestMove(attacker.types, attacker.baseStats, attacker.speciesId, 1);
-    const { damage, typeEff } = calcDamage(attacker, defender, move, [], [], [attacker], seededRng(2));
+    const { damage, typeEff } = calcDamage(
+      attacker,
+      defender,
+      move,
+      [],
+      [],
+      [attacker],
+      seededRng(2),
+    );
     assert.equal(typeEff, 0);
     assert.equal(damage, 0);
   });

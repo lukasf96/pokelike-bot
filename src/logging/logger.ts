@@ -93,7 +93,9 @@ export function logRunStarted(run: number): void {
 export function logTurnHeader(run: number, turn: number, screen: string): void {
   const scr = styleForScreen(screen)(screen);
   const runLabel = noColor ? `run ${run}` : paint("1;36", `run ${run}`);
-  console.log(`  ${runLabel} ${style.dim("·")} ${style.dim(`turn ${turn}`)} ${style.dim("·")} ${scr}`);
+  console.log(
+    `  ${runLabel} ${style.dim("·")} ${style.dim(`turn ${turn}`)} ${style.dim("·")} ${scr}`,
+  );
 }
 
 /**

@@ -33,7 +33,10 @@ describe("eligibleTrainerSpeciesIds", () => {
     // On Map 0 the cap is low; any id whose minimum level exceeds it should drop out.
     const early = eligibleTrainerSpeciesIds("bugcatcher", 0);
     const late = eligibleTrainerSpeciesIds("bugcatcher", 7);
-    assert.ok(late.length >= early.length, `late pool (${late.length}) should include early pool (${early.length})`);
+    assert.ok(
+      late.length >= early.length,
+      `late pool (${late.length}) should include early pool (${early.length})`,
+    );
   });
 });
 
@@ -136,7 +139,9 @@ describe("shouldReorderForBattle", () => {
   });
 
   it("reorders for trainers when enemy typings are known", () => {
-    assert.ok(shouldReorderForBattle("trainer", { category: "trainer", key: "bugcatcher" }, [["Bug"]]));
+    assert.ok(
+      shouldReorderForBattle("trainer", { category: "trainer", key: "bugcatcher" }, [["Bug"]]),
+    );
     assert.equal(
       shouldReorderForBattle("trainer", { category: "trainer", key: "bugcatcher" }, []),
       false,
@@ -218,7 +223,12 @@ describe("scoreCandidate", () => {
 
   it("catches on a saturated team de-prioritise (negative or near-zero)", () => {
     const catchNode: MapCandidateBrief = { href: "/sprites/pokeball.png", surfaceKind: "catch" };
-    const s = scoreCandidate(false, catchNode, team, ctxFor({ aliveTeamSize: 6, bossImminent: true }));
+    const s = scoreCandidate(
+      false,
+      catchNode,
+      team,
+      ctxFor({ aliveTeamSize: 6, bossImminent: true }),
+    );
     assert.ok(s <= 1, `saturated+boss-imminent catch should be low, got ${s}`);
   });
 

@@ -5,12 +5,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: [
-      "dist/**",
-      "logs/**",
-      "node_modules/**",
-      "pokelike-source-files/**",
-    ],
+    ignores: ["dist/**", "logs/**", "node_modules/**", "pokelike-source-files/**"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -36,5 +31,5 @@ export default tseslint.config(
       ],
     },
   },
-  eslintConfigPrettier
+  eslintConfigPrettier,
 );

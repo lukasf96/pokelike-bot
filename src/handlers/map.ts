@@ -15,9 +15,17 @@ import {
 import { BOSS_TYPES_BY_MAP } from "../intel/catch-intel.js";
 import { logAction } from "../logging/logger.js";
 import { recordDecision } from "../logging/run-detail-log.js";
-import { adjustMapScoreWithWinProbability, estimateBattleWinProbability } from "../sim/win-probability.js";
+import {
+  adjustMapScoreWithWinProbability,
+  estimateBattleWinProbability,
+} from "../sim/win-probability.js";
 import type { Handler, HandlerCtx } from "../state/handler.js";
-import { selectBagItemIds, selectItemTeam, selectTeamBrief, selectTeamHp } from "../state/selectors.js";
+import {
+  selectBagItemIds,
+  selectItemTeam,
+  selectTeamBrief,
+  selectTeamHp,
+} from "../state/selectors.js";
 import type { Tick } from "../state/types.js";
 import { sleep } from "../utility/page-utils.js";
 import { maybeEquipBagHeldItems, maybeOptimizeHeldItemSwaps } from "./held-item-swaps.js";
@@ -65,9 +73,7 @@ export const handleMap: Handler = async (initialTick, ctx) => {
       ? { category: "elite", eliteIndex: game.eliteIndex }
       : { category: "gym", mapIndex: game.currentMap };
   const pWinBoss = estimateBattleWinProbability(bossIntel, teamRaw, bagItemIds, context);
-  const bossImminent = candidates.some(
-    (c) => c.surfaceKind === "gym" || c.surfaceKind === "elite",
-  );
+  const bossImminent = candidates.some((c) => c.surfaceKind === "gym" || c.surfaceKind === "elite");
   const pcAvailable = candidates.some((c) => c.surfaceKind === "pokecenter");
 
   // Team-level / boss-level summary feeds Grind Mode in scoreCandidate.
@@ -141,10 +147,7 @@ export const handleMap: Handler = async (initialTick, ctx) => {
 
   const chosen = candidates[bestIdx]!;
   const best = scored[bestIdx]!;
-  const prep = pickBattlePrepIntel(
-    { href: chosen.href, surfaceKind: chosen.surfaceKind },
-    context,
-  );
+  const prep = pickBattlePrepIntel({ href: chosen.href, surfaceKind: chosen.surfaceKind }, context);
 
   if (shouldReorderForBattle(chosen.surfaceKind, prep.intel, prep.enemyTypings)) {
     const order =
@@ -157,10 +160,12 @@ export const handleMap: Handler = async (initialTick, ctx) => {
   }
 
   await ctx.page.evaluate((pickIndex: number) => {
-    const clickable = Array.from(document.querySelectorAll<SVGGElement>("#map-container g")).filter((g) =>
-      (g.getAttribute("style") ?? "").includes("cursor: pointer"),
+    const clickable = Array.from(document.querySelectorAll<SVGGElement>("#map-container g")).filter(
+      (g) => (g.getAttribute("style") ?? "").includes("cursor: pointer"),
     );
-    clickable[pickIndex]?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    clickable[pickIndex]?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
   }, bestIdx);
 
   const summary = scored.map((r) => `${r.c.surfaceKind}(${r.adjusted.toFixed(1)})`).join(", ");
@@ -244,7 +249,10 @@ async function reorderTeam(ctx: HandlerCtx, order: number[]): Promise<void> {
   }, order);
 }
 
-function formatPrepDetail(surfaceKind: string, intel: ReturnType<typeof pickBattlePrepIntel>["intel"]): string {
+function formatPrepDetail(
+  surfaceKind: string,
+  intel: ReturnType<typeof pickBattlePrepIntel>["intel"],
+): string {
   if (surfaceKind === "question") return " (?)";
   switch (intel.category) {
     case "trainer":

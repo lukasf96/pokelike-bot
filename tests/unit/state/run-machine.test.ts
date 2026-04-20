@@ -49,7 +49,9 @@ describe("RunMachine", () => {
     const kinds = events.map((e) => e.type);
     assert.ok(kinds.includes("run-started"));
     const pc = events.find((e) => e.type === "phase-changed");
-    assert.ok(pc && pc.type === "phase-changed" && pc.from.kind === "unknown" && pc.to.kind === "title");
+    assert.ok(
+      pc && pc.type === "phase-changed" && pc.from.kind === "unknown" && pc.to.kind === "title",
+    );
     assert.equal(rm.runNumber, 1);
   });
 
@@ -134,6 +136,10 @@ describe("RunMachine", () => {
     });
     rm.step(makeTick({ kind: "map" }, { game: gameWithTeam }));
     rm.step(makeTick({ kind: "battle" }, { game: makeGame({ currentMap: 0, team: [] }) }));
-    assert.equal(rm.lastGame!.team.length, 1, "lastGame should retain the old team for defeat logging");
+    assert.equal(
+      rm.lastGame!.team.length,
+      1,
+      "lastGame should retain the old team for defeat logging",
+    );
   });
 });

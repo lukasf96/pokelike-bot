@@ -14,7 +14,10 @@ import { ELITE_ROSTERS, GYM_ROSTERS } from "../data/gym-elite-rosters.js";
  * elite for currentMap=8). Used by Grind Mode to detect when the team is
  * dangerously under-levelled and we should detour into trainer/wild fights.
  */
-export function bossLevelStats(currentMap: number, eliteIndex: number): { leadLevel: number; maxLevel: number } {
+export function bossLevelStats(
+  currentMap: number,
+  eliteIndex: number,
+): { leadLevel: number; maxLevel: number } {
   if (currentMap >= 8) {
     const idx = Math.min(Math.max(0, eliteIndex), ELITE_ROSTERS.length - 1);
     const team = ELITE_ROSTERS[idx]?.team ?? [];
@@ -62,15 +65,9 @@ export function attackingStabTypes(types: string[]): string[] {
 }
 
 const TRAINER_SPECIES_POOL: Map<string, number[]> = new Map([
-  [
-    "bugcatcher",
-    [10, 11, 12, 13, 14, 15, 46, 47, 48, 49, 123, 127],
-  ],
+  ["bugcatcher", [10, 11, 12, 13, 14, 15, 46, 47, 48, 49, 123, 127]],
   ["hiker", [27, 28, 50, 51, 66, 67, 68, 74, 75, 76, 95, 111, 112]],
-  [
-    "fisher",
-    [54, 55, 60, 61, 62, 72, 73, 86, 87, 90, 91, 98, 99, 116, 117, 118, 119, 129, 130],
-  ],
+  ["fisher", [54, 55, 60, 61, 62, 72, 73, 86, 87, 90, 91, 98, 99, 116, 117, 118, 119, 129, 130]],
   ["scientist", [81, 82, 88, 89, 92, 93, 94, 100, 101, 137]],
   ["teamrocket", [19, 20, 23, 24, 41, 42, 52, 53, 88, 89, 109, 110]],
   ["policeman", [58, 59]],
@@ -112,7 +109,13 @@ const ELITE_TEAM_TYPES: string[][][] = [
     ["Water", "Ice"],
   ],
   [["Rock", "Ground"], ["Fighting"], ["Fighting"], ["Rock", "Ground"], ["Fighting"]],
-  [["Ghost", "Poison"], ["Poison", "Flying"], ["Ghost", "Poison"], ["Poison", "Flying"], ["Ghost", "Poison"]],
+  [
+    ["Ghost", "Poison"],
+    ["Poison", "Flying"],
+    ["Ghost", "Poison"],
+    ["Poison", "Flying"],
+    ["Ghost", "Poison"],
+  ],
   [["Water", "Flying"], ["Dragon", "Flying"], ["Dragon"], ["Dragon"], ["Dragon", "Flying"]],
   [["Normal", "Flying"], ["Psychic"], ["Ground", "Rock"], ["Grass", "Psychic"], ["Fire", "Flying"]],
 ];
@@ -212,13 +215,7 @@ export function expectedQuestionMarkSurfaceBase(): number {
   const pItem = 0.13;
   const pShiny = 0.07;
   const pMega = 0.28;
-  return (
-    pBattle * 1 +
-    pTrainer * 1 +
-    pCatch * 4 +
-    (pItem + pMega) * 3 +
-    pShiny * 3
-  );
+  return pBattle * 1 + pTrainer * 1 + pCatch * 4 + (pItem + pMega) * 3 + pShiny * 3;
 }
 
 export function inferNodeIntel(hrefRaw: string, context: IntelContext): NodeIntel {
@@ -228,7 +225,8 @@ export function inferNodeIntel(hrefRaw: string, context: IntelContext): NodeInte
   const stem = stemRaw.toLowerCase();
 
   if (href.includes("legendaryEncounter")) return { category: "legendary" };
-  if (href.includes("grass.png") || stem === "grass") return { category: "wild", mapIndex: context.currentMap };
+  if (href.includes("grass.png") || stem === "grass")
+    return { category: "wild", mapIndex: context.currentMap };
   if (stem === "champ") return { category: "elite", eliteIndex: context.eliteIndex };
 
   if (stem === "acetrainer" || stem === "oldguy") {
@@ -239,7 +237,16 @@ export function inferNodeIntel(hrefRaw: string, context: IntelContext): NodeInte
     if (stem === key.toLowerCase()) return { category: "trainer", key };
   }
 
-  const gymStems = new Set(["brock", "misty", "erika", "koga", "sabrina", "blaine", "giovanni", "lt. surge"]);
+  const gymStems = new Set([
+    "brock",
+    "misty",
+    "erika",
+    "koga",
+    "sabrina",
+    "blaine",
+    "giovanni",
+    "lt. surge",
+  ]);
   if (gymStems.has(stem)) return { category: "gym", mapIndex: context.currentMap };
 
   return { category: "neutral" };
@@ -350,7 +357,10 @@ export function computeTeamOrder(team: TeamMemberBrief[], leadTypingsPool: strin
 }
 
 /** Matches resolveQuestionMark battle weights: wild vs dynamic trainer — expected lead matchup before rolling the outcome. */
-export function computeTeamOrderForQuestionMark(team: TeamMemberBrief[], context: IntelContext): number[] {
+export function computeTeamOrderForQuestionMark(
+  team: TeamMemberBrief[],
+  context: IntelContext,
+): number[] {
   const n = team.length;
   const indices = Array.from({ length: n }, (_, i) => i);
 
@@ -511,13 +521,16 @@ export function scoreCandidate(
     // override (catch=8 vs battle=14) caused 8/13 last-batch runs to die
     // as a solo Bulbasaur. mustGrindCounter only kicks in at alive ≥ 2.
     if (aliveTeamSize <= 1) base = 30;
-    else if (tinyTeam && mustGrindCounter) base = 14; // alive=2: split focus
+    else if (tinyTeam && mustGrindCounter)
+      base = 14; // alive=2: split focus
     else if (tinyTeam) base = 30;
     else if (buildingTeam && mustGrindCounter) base = 5;
-    else if (buildingTeam) base = 12; // Build coverage before grinding
+    else if (buildingTeam)
+      base = 12; // Build coverage before grinding
     else if (bossImminent) base = -3;
     else if (teamSaturated && !desperateGrind) base = grindMode ? -2 : 1;
-    else if (grindMode) base = 1; // grinding XP > catching for cap closing
+    else if (grindMode)
+      base = 1; // grinding XP > catching for cap closing
     else base = 4;
   } else if (cand.surfaceKind === "item" || cand.surfaceKind === "move_tutor") {
     base = grindMode ? 2 : 3;
@@ -543,8 +556,10 @@ export function scoreCandidate(
       else if (tinyTeam && mustGrindCounter) base = 16;
       else if (tinyTeam) base = 4;
       else if (buildingTeam && mustGrindCounter) base = 28;
-      else if (buildingTeam) base = 10; // Catch slightly favoured at ≤3 mons
-      else if (weakTeam) base = 26; // L<8 team with bodies: GRIND
+      else if (buildingTeam)
+        base = 10; // Catch slightly favoured at ≤3 mons
+      else if (weakTeam)
+        base = 26; // L<8 team with bodies: GRIND
       else if (desperateGrind) base = 35;
       else if (grindMode) base = 22;
       else if (bossWinShaky && !bossImminent) base = 8;
@@ -602,8 +617,7 @@ export function scoreCandidate(
   if (
     bonus < 0 &&
     (mustGrindCounter || weakTeam || desperateGrind) &&
-    (cand.surfaceKind === "battle" ||
-      cand.surfaceKind === "trainer")
+    (cand.surfaceKind === "battle" || cand.surfaceKind === "trainer")
   ) {
     bonus *= 0.25;
   }
@@ -631,7 +645,8 @@ export function shouldReorderForBattle(
   if (surfaceKind === "question") return true;
   if (intel.category === "gym" || intel.category === "elite") return true;
   if (intel.category === "legendary") return enemyTypings.length > 0;
-  if (intel.category === "wild" || intel.category === "dynamic_trainer") return enemyTypings.length > 0;
+  if (intel.category === "wild" || intel.category === "dynamic_trainer")
+    return enemyTypings.length > 0;
   if (intel.category === "trainer" && enemyTypings.length > 0) return true;
   return false;
 }

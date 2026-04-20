@@ -100,14 +100,18 @@ export function redundancyReleaseBias(
       if (eff > 0.5) allResisted = false;
       if (eff >= 2) anySE = true;
     }
-    if (allResisted) bias += 350; // strong release bias
-    else if (!anySE) bias += 80;  // mildly redundant + neutral, lower bias
+    if (allResisted)
+      bias += 350; // strong release bias
+    else if (!anySE) bias += 80; // mildly redundant + neutral, lower bias
   }
   return bias;
 }
 
 /** Shiny, key held items, tutor tier 2, Eevee + Moon Stone. */
-export function isHardProtectedRelease(member: ReleaseTeamMember, moonStoneInBag: boolean): boolean {
+export function isHardProtectedRelease(
+  member: ReleaseTeamMember,
+  moonStoneInBag: boolean,
+): boolean {
   if (member.isShiny) return true;
   const hid = member.heldItemId;
   if (hid === "lucky_egg" || hid === "eviolite") return true;

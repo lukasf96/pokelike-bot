@@ -8,7 +8,12 @@ export async function enableAutoSkip(page: Page): Promise<void> {
     try {
       const raw = localStorage.getItem("poke_settings");
       const s = Object.assign(
-        { autoSkipBattles: false, autoSkipAllBattles: false, autoSkipEvolve: true, darkMode: false },
+        {
+          autoSkipBattles: false,
+          autoSkipAllBattles: false,
+          autoSkipEvolve: true,
+          darkMode: false,
+        },
         raw ? JSON.parse(raw) : {},
       );
       s.autoSkipAllBattles = true;

@@ -13,7 +13,12 @@ const CTX = { currentMap: 0, eliteIndex: 0 };
 describe("normalizeSimTeam", () => {
   it("skips entries without a speciesId and fills in defaults", () => {
     const team = normalizeSimTeam([
-      { speciesId: 25, level: 20, types: ["Electric"], baseStats: { hp: 35, atk: 55, def: 40, special: 50, speed: 90 } },
+      {
+        speciesId: 25,
+        level: 20,
+        types: ["Electric"],
+        baseStats: { hp: 35, atk: 55, def: 40, special: 50, speed: 90 },
+      },
       { speciesId: 0 }, // dropped
       null,
       { speciesId: 1, level: 5 }, // falls back to defaults
@@ -44,13 +49,25 @@ describe("normalizeSimTeam", () => {
 describe("estimateBattleWinProbability", () => {
   const STRONG_TEAM = [
     // Late-game carry: L60 Venusaur-equivalent stats
-    { speciesId: 3, level: 60, types: ["Grass", "Poison"], currentHp: 180, maxHp: 180,
-      baseStats: { hp: 80, atk: 82, def: 83, special: 100, speed: 80, spdef: 100 } },
+    {
+      speciesId: 3,
+      level: 60,
+      types: ["Grass", "Poison"],
+      currentHp: 180,
+      maxHp: 180,
+      baseStats: { hp: 80, atk: 82, def: 83, special: 100, speed: 80, spdef: 100 },
+    },
   ];
 
   const WEAK_TEAM = [
-    { speciesId: 10, level: 3, types: ["Bug"], currentHp: 18, maxHp: 18,
-      baseStats: { hp: 45, atk: 30, def: 35, special: 20, speed: 45, spdef: 20 } },
+    {
+      speciesId: 10,
+      level: 3,
+      types: ["Bug"],
+      currentHp: 18,
+      maxHp: 18,
+      baseStats: { hp: 45, atk: 30, def: 35, special: 20, speed: 45, spdef: 20 },
+    },
   ];
 
   it("returns a value in [0, 1]", () => {
@@ -138,12 +155,18 @@ describe("adjustMapScoreWithWinProbability", () => {
     assert.ok(adjustMapScoreWithWinProbability(100, trainer, false, 0.2) < 0);
     assert.ok(adjustMapScoreWithWinProbability(100, trainer, false, 0.45) > 0);
     // Solo → floor 0.55
-    assert.ok(adjustMapScoreWithWinProbability(100, trainer, false, 0.45, { aliveTeamSize: 1 }) < 0);
+    assert.ok(
+      adjustMapScoreWithWinProbability(100, trainer, false, 0.45, { aliveTeamSize: 1 }) < 0,
+    );
   });
 
   it("refuses dynamic trainers on tiny teams even at pWin=1 (variance blow-up)", () => {
-    assert.ok(adjustMapScoreWithWinProbability(100, dynamicTrainer, false, 0.8, { aliveTeamSize: 2 }) < 0);
-    assert.ok(adjustMapScoreWithWinProbability(100, dynamicTrainer, false, 0.9, { aliveTeamSize: 4 }) > 0);
+    assert.ok(
+      adjustMapScoreWithWinProbability(100, dynamicTrainer, false, 0.8, { aliveTeamSize: 2 }) < 0,
+    );
+    assert.ok(
+      adjustMapScoreWithWinProbability(100, dynamicTrainer, false, 0.9, { aliveTeamSize: 4 }) > 0,
+    );
   });
 
   it("refusals preserve pWin ordering (higher pWin → less negative)", () => {

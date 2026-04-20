@@ -1,10 +1,6 @@
 import type { Page } from "puppeteer";
 
-import {
-  attackingStabTypes,
-  bossLevelStats,
-  typeEffectiveness,
-} from "../intel/battle-intel.js";
+import { attackingStabTypes, bossLevelStats, typeEffectiveness } from "../intel/battle-intel.js";
 import { BOSS_TYPES_BY_MAP } from "../intel/catch-intel.js";
 import { CROSS_SPECIES_EVOLUTION_BST, GEN1_EVOLUTIONS } from "../data/gen1-evolutions.js";
 import { logAction } from "../logging/logger.js";
@@ -32,9 +28,7 @@ interface UsableSnapshot {
 function fromTick(tick: Tick): UsableSnapshot | null {
   if (!tick.game) return null;
   const game = tick.game;
-  const pcAvailable = (tick.ui.map?.candidates ?? []).some(
-    (c) => c.surfaceKind === "pokecenter",
-  );
+  const pcAvailable = (tick.ui.map?.candidates ?? []).some((c) => c.surfaceKind === "pokecenter");
   return {
     team: selectItemTeam(game),
     bag: game.bag,
@@ -101,10 +95,13 @@ function bossCounterIndices(team: TeamMemberForItem[], currentMap: number): numb
   return ranked.map((r) => r.idx);
 }
 
-function pickRareCandySlot(team: TeamMemberForItem[], currentMap: number, candyCount: number, minReserve: number): number {
-  const usable = team
-    .map((p, i) => ({ p, i }))
-    .filter(({ p }) => p.level < 100);
+function pickRareCandySlot(
+  team: TeamMemberForItem[],
+  currentMap: number,
+  candyCount: number,
+  minReserve: number,
+): number {
+  const usable = team.map((p, i) => ({ p, i })).filter(({ p }) => p.level < 100);
   if (usable.length === 0) return -1;
 
   const bestAmong = (pairs: Array<{ p: TeamMemberForItem; i: number }>): number => {
@@ -223,7 +220,11 @@ function shouldUseMaxRevive(snap: UsableSnapshot): boolean {
   return alive < 3;
 }
 
-async function clickUsableItemOnSlot(page: Page, bagIdx: number, slotIdx: number): Promise<boolean> {
+async function clickUsableItemOnSlot(
+  page: Page,
+  bagIdx: number,
+  slotIdx: number,
+): Promise<boolean> {
   const opened = await page.evaluate((badgeIdx: number): boolean => {
     const bar = document.getElementById("item-bar");
     const badges = bar?.querySelectorAll(".item-badge");
@@ -246,9 +247,11 @@ async function clickUsableItemOnSlot(page: Page, bagIdx: number, slotIdx: number
   }, slotIdx);
 }
 
-type NextUse =
-  | { itemId: "max_revive" | "rare_candy" | "moon_stone"; bagIdx: number; slotIdx: number }
-  | null;
+type NextUse = {
+  itemId: "max_revive" | "rare_candy" | "moon_stone";
+  bagIdx: number;
+  slotIdx: number;
+} | null;
 
 function planNextUse(snap: UsableSnapshot): NextUse {
   const usableBag = snap.bag.filter((b) => b.usable && b.id);

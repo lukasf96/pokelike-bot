@@ -80,7 +80,8 @@ describe("overlay / modal ids the bot listens for", () => {
   // or an inner button id, so we check both are still wired.
   it("eevee-choice-overlay is referenced in ui.js or game.js", () => {
     assert.ok(
-      read(UI_JS).includes("eevee-choice-overlay") || read(GAME_JS).includes("eevee-choice-overlay"),
+      read(UI_JS).includes("eevee-choice-overlay") ||
+        read(GAME_JS).includes("eevee-choice-overlay"),
       "eevee-choice-overlay not present — handlers/eevee.ts will never fire",
     );
   });
@@ -129,7 +130,13 @@ describe("localStorage run schema", () => {
   it("persists team / items / badges / currentMap / eliteIndex on state", () => {
     // We check for "state.<field>" usage (structural) rather than the saved
     // JSON shape, because saveRun does `{ ...state }`.
-    const required = ["state.team", "state.items", "state.badges", "state.currentMap", "state.eliteIndex"];
+    const required = [
+      "state.team",
+      "state.items",
+      "state.badges",
+      "state.currentMap",
+      "state.eliteIndex",
+    ];
     for (const r of required) {
       assert.ok(js.includes(r), `game.js no longer references ${r} — snapshot.ts reads this`);
     }
@@ -176,8 +183,10 @@ describe("Pokémon sprite URL shape (catch species-id extraction)", () => {
   it("parseSpeciesIdFromSpriteUrl matches the URL shapes the game emits", () => {
     // Extract one literal URL expression from game.js to round-trip.
     // We recreate the exact template substitutions by hand with a known id.
-    const exampleNormal = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png";
-    const exampleShiny = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/6.png";
+    const exampleNormal =
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png";
+    const exampleShiny =
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/6.png";
     assert.equal(parseSpeciesIdFromSpriteUrl(exampleNormal), 25);
     assert.equal(parseSpeciesIdFromSpriteUrl(exampleShiny), 6);
   });
