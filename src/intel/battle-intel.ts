@@ -276,6 +276,32 @@ export function enemyTypingsForIntel(intel: NodeIntel, context: IntelContext): s
   }
 }
 
+/**
+ * Ordered enemy sequence for fixed-roster fights (gym, elite). Returns `null`
+ * for categories whose enemy composition is sampled at battle time — those
+ * still use pool-based expected-value ordering (`computeTeamOrder`).
+ *
+ * The sequence reflects the authored roster order in `data.js`, which the
+ * game iterates through on defeat — i.e. our slot `i` faces enemy slot `i`
+ * in the typical 1-for-1 trade cycle. Assignment-style ordering over this
+ * sequence is dramatically better than lead-only scoring on multi-mon gyms
+ * (Sabrina, Blaine, Giovanni, E4) — see finding F-003.
+ */
+export function enemySequenceForIntel(
+  intel: NodeIntel,
+  _context: IntelContext,
+): string[][] | null {
+  if (intel.category === "gym") {
+    const mi = Math.min(Math.max(0, intel.mapIndex), GYM_TEAM_TYPES.length - 1);
+    return GYM_TEAM_TYPES[mi] ?? null;
+  }
+  if (intel.category === "elite") {
+    const ei = Math.min(Math.max(0, intel.eliteIndex), ELITE_TEAM_TYPES.length - 1);
+    return ELITE_TEAM_TYPES[ei] ?? null;
+  }
+  return null;
+}
+
 export function leadTypingsPoolForIntel(intel: NodeIntel, context: IntelContext): string[][] {
   switch (intel.category) {
     case "gym": {
@@ -331,6 +357,72 @@ function leadScoreForTypes(p: TeamMemberBrief | undefined, leadEnemyTypes: strin
   // don't lead a Lv8 Pikachu into a Lv20 Starmie when a Lv13 backup exists.
   const levelTerm = (p.level ?? 0) * 0.05;
   return bestOff * 6 - worstDef * 3 + levelTerm;
+}
+
+/**
+ * Assignment-based ordering for fixed-roster fights (gym/elite). Finds the
+ * team permutation that maximizes Σ `leadScoreForTypes(team[perm[j]],
+ * enemySequence[j])` over positions `j = 0..min(teamLen, enemyLen)-1`, then
+ * appends the bench sorted by average matchup over the full enemy sequence.
+ *
+ * This mirrors the game's 1-for-1 trade cycle (player slot `i` vs enemy slot
+ * `i`) and is materially better than lead-only scoring on multi-mon bosses
+ * where the best answer to the ace is often not the best lead — see F-003.
+ *
+ * Brute-force over permutations of `slots` picks from `n` team members
+ * (worst case P(6,5) = 720 evaluations, sub-millisecond).
+ */
+export function computeTeamOrderAssignment(
+  team: TeamMemberBrief[],
+  enemySequence: string[][],
+): number[] {
+  const n = team.length;
+  const indices = Array.from({ length: n }, (_, i) => i);
+  if (n === 0 || enemySequence.length === 0) return indices;
+
+  const slots = Math.min(n, enemySequence.length);
+
+  const score: number[][] = Array.from({ length: n }, () => new Array<number>(slots).fill(0));
+  for (let i = 0; i < n; i += 1) {
+    for (let j = 0; j < slots; j += 1) {
+      score[i]![j] = leadScoreForTypes(team[i], enemySequence[j]!);
+    }
+  }
+
+  let bestFront: number[] = indices.slice(0, slots);
+  let bestScore = -Infinity;
+  const used = new Array<boolean>(n).fill(false);
+  const current: number[] = [];
+
+  function enumerate(depth: number): void {
+    if (depth === slots) {
+      let s = 0;
+      for (let j = 0; j < slots; j += 1) s += score[current[j]!]![j]!;
+      if (s > bestScore) {
+        bestScore = s;
+        bestFront = current.slice();
+      }
+      return;
+    }
+    for (let i = 0; i < n; i += 1) {
+      if (used[i]) continue;
+      used[i] = true;
+      current.push(i);
+      enumerate(depth + 1);
+      current.pop();
+      used[i] = false;
+    }
+  }
+  enumerate(0);
+
+  const assigned = new Set<number>(bestFront);
+  const benchAvg = (idx: number): number => {
+    let s = 0;
+    for (const e of enemySequence) s += leadScoreForTypes(team[idx], e);
+    return s / enemySequence.length;
+  };
+  const bench = indices.filter((i) => !assigned.has(i)).sort((a, b) => benchAvg(b) - benchAvg(a));
+  return [...bestFront, ...bench];
 }
 
 /**
@@ -628,12 +720,19 @@ export function scoreCandidate(
 export function pickBattlePrepIntel(
   chosen: MapCandidateBrief,
   context: IntelContext,
-): { intel: NodeIntel; leadTypingsPool: string[][]; enemyTypings: string[][] } {
+): {
+  intel: NodeIntel;
+  leadTypingsPool: string[][];
+  enemyTypings: string[][];
+  /** Ordered enemy team typings for fixed-roster fights (gym/elite); null otherwise. */
+  enemySequence: string[][] | null;
+} {
   const intel = inferNodeIntel(chosen.href, context);
   return {
     intel,
     leadTypingsPool: leadTypingsPoolForIntel(intel, context),
     enemyTypings: enemyTypingsForIntel(intel, context),
+    enemySequence: enemySequenceForIntel(intel, context),
   };
 }
 

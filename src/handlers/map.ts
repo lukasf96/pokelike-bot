@@ -9,6 +9,7 @@ import {
   scoreCandidate,
   shouldReorderForBattle,
   computeTeamOrder,
+  computeTeamOrderAssignment,
   computeTeamOrderForQuestionMark,
   typeEffectiveness,
 } from "../intel/battle-intel.js";
@@ -150,10 +151,16 @@ export const handleMap: Handler = async (initialTick, ctx) => {
   const prep = pickBattlePrepIntel({ href: chosen.href, surfaceKind: chosen.surfaceKind }, context);
 
   if (shouldReorderForBattle(chosen.surfaceKind, prep.intel, prep.enemyTypings)) {
+    // Gym/elite fights use slot-to-slot assignment over the authored enemy
+    // sequence (F-003). Everything else keeps the pool-based expected-lead
+    // heuristic: trainers/wild/legendary rosters are sampled at battle time
+    // so there's no fixed "slot j" to assign against.
     const order =
       chosen.surfaceKind === "question"
         ? computeTeamOrderForQuestionMark(teamBrief, context)
-        : computeTeamOrder(teamBrief, prep.leadTypingsPool);
+        : prep.enemySequence && prep.enemySequence.length > 0
+          ? computeTeamOrderAssignment(teamBrief, prep.enemySequence)
+          : computeTeamOrder(teamBrief, prep.leadTypingsPool);
     await reorderTeam(ctx, order);
     const detail = formatPrepDetail(chosen.surfaceKind, prep.intel);
     logAction("map", `team order → [${order.join(",")}] for ${prep.intel.category}${detail}`);

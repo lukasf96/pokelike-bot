@@ -5,6 +5,8 @@ import {
   attackingStabTypes,
   bossLevelStats,
   computeTeamOrder,
+  computeTeamOrderAssignment,
+  enemySequenceForIntel,
   inferNodeIntel,
   typeEffectiveness,
 } from "../../../src/intel/battle-intel.ts";
@@ -155,5 +157,125 @@ describe("computeTeamOrder", () => {
   it("returns identity order when the lead pool is empty", () => {
     const team = [{ types: ["Fire"] }, { types: ["Water"] }];
     assert.deepEqual(computeTeamOrder(team, []), [0, 1]);
+  });
+});
+
+describe("enemySequenceForIntel", () => {
+  const ctx = { currentMap: 5, eliteIndex: 0 };
+
+  it("returns the ordered gym sequence for gym nodes", () => {
+    // Sabrina (map 5): [Psychic, Bug/Poison, Psychic, Psychic].
+    const seq = enemySequenceForIntel({ category: "gym", mapIndex: 5 }, ctx);
+    assert.ok(seq !== null);
+    assert.equal(seq!.length, 4);
+    assert.deepEqual(seq![0], ["Psychic"]);
+    assert.deepEqual(seq![1], ["Bug", "Poison"]);
+  });
+
+  it("returns the ordered elite sequence for elite nodes", () => {
+    const seq = enemySequenceForIntel({ category: "elite", eliteIndex: 0 }, { ...ctx, currentMap: 8 });
+    assert.ok(seq !== null);
+    assert.equal(seq!.length, 5);
+  });
+
+  it("returns null for sampled-enemy categories", () => {
+    assert.equal(enemySequenceForIntel({ category: "wild", mapIndex: 3 }, ctx), null);
+    assert.equal(enemySequenceForIntel({ category: "trainer", key: "bugcatcher" }, ctx), null);
+    assert.equal(
+      enemySequenceForIntel({ category: "dynamic_trainer", mapIndex: 3 }, ctx),
+      null,
+    );
+    assert.equal(enemySequenceForIntel({ category: "legendary" }, ctx), null);
+    assert.equal(enemySequenceForIntel({ category: "neutral" }, ctx), null);
+  });
+});
+
+describe("computeTeamOrderAssignment", () => {
+  it("assigns slot-to-slot for Sabrina (Bug to Psychic leads, Fire to Venomoth)", () => {
+    // Sabrina: [Psychic, Bug/Poison, Psychic, Psychic]. With Gen-2+ chart
+    // mirrored from data.js, Bug vs Poison = 0.5 and Fire vs Bug = 2, so:
+    //   Bug  → +6 on Psychic slot,   −12 on Bug/Poison slot
+    //   Fire → neutral on Psychic,   best on Bug/Poison (Fire 2× Bug)
+    // Lead-only scoring would place Bug on slot 0 but completely waste
+    // Sabrina's slot-1 Venomoth — assignment places Fire there explicitly.
+    const team = [
+      { types: ["Bug"], level: 40 }, // Scyther-ish — SE vs Psychic
+      { types: ["Fire"], level: 40 }, // Charizard-ish — SE vs Bug/Poison
+      { types: ["Electric"], level: 40 }, // bench filler
+      { types: ["Water"], level: 40 }, // bench filler
+    ];
+    const sabrina = [["Psychic"], ["Bug", "Poison"], ["Psychic"], ["Psychic"]];
+    const order = computeTeamOrderAssignment(team, sabrina);
+
+    // Fire (idx 1) is uniquely best vs slot 1 Venomoth (+6 over every
+    // other team member) — the defining case the lead-only heuristic missed.
+    assert.equal(order[1], 1, `expected Fire mon on slot 1, got ${order.join(",")}`);
+
+    // Bug (idx 0) dominates Psychic slots — slot 0 is the natural landing.
+    assert.equal(order[0], 0, `expected Bug mon on slot 0, got ${order.join(",")}`);
+
+    // The remaining two slots are filled by the benchers (order preserved or
+    // not, but they must be in {2, 3}).
+    assert.deepEqual(new Set(order.slice(2)), new Set([2, 3]));
+  });
+
+  it("pushes fainted members to the bench across the assignment", () => {
+    const team = [
+      { types: ["Bug"], level: 40, isFainted: true }, // best typing but fainted
+      { types: ["Fire"], level: 40 },
+      { types: ["Normal"], level: 40 },
+    ];
+    const sabrina = [["Psychic"], ["Bug", "Poison"]];
+    const order = computeTeamOrderAssignment(team, sabrina);
+    // Fainted mon must not be assigned to a front slot.
+    assert.ok(order.slice(0, 2).every((i) => i !== 0), `fainted mon leaked to front: ${order}`);
+    assert.equal(order[order.length - 1], 0);
+  });
+
+  it("is a no-op when the enemy sequence is empty", () => {
+    const team = [{ types: ["Fire"] }, { types: ["Water"] }];
+    assert.deepEqual(computeTeamOrderAssignment(team, []), [0, 1]);
+  });
+
+  it("handles teams larger than the enemy sequence (bench overflow)", () => {
+    const team = [
+      { types: ["Normal"], level: 10 },
+      { types: ["Bug"], level: 20 }, // best vs Psychic
+      { types: ["Fire"], level: 15 }, // best vs Bug/Poison
+      { types: ["Water"], level: 10 },
+      { types: ["Grass"], level: 10 },
+    ];
+    const enemySequence = [["Psychic"], ["Bug", "Poison"]];
+    const order = computeTeamOrderAssignment(team, enemySequence);
+    assert.equal(order.length, 5);
+    assert.equal(new Set(order).size, 5);
+    assert.equal(order[0], 1);
+    assert.equal(order[1], 2);
+  });
+
+  it("differs from lead-only ordering when a non-lead slot has a unique counter", () => {
+    // Lead-only ranks mons by average matchup over the lead pool. With three
+    // Psychic slots and one Bug/Poison slot, a second Bug-typed mon out-ranks
+    // Fire on average — so lead-only stacks two Bugs up front and Fire falls
+    // to slot 2, leaving Venomoth to fight Electric/Water at neutral damage.
+    // Assignment instead earmarks Fire for slot 1 where it's uniquely best.
+    const team = [
+      { types: ["Bug"], level: 40 }, // SE vs three Psychic slots
+      { types: ["Bug"], level: 40 }, // second Bug — bumps avg above Fire
+      { types: ["Fire"], level: 40 }, // uniquely SE vs Bug/Poison slot
+      { types: ["Water"], level: 40 },
+    ];
+    const sabrina = [["Psychic"], ["Bug", "Poison"], ["Psychic"], ["Psychic"]];
+    const leadPool = [["Psychic"], ...sabrina];
+
+    const assignmentOrder = computeTeamOrderAssignment(team, sabrina);
+    const leadOnlyOrder = computeTeamOrder(team, leadPool);
+
+    assert.equal(assignmentOrder[1], 2, `assignment should place Fire on slot 1`);
+    assert.notEqual(
+      leadOnlyOrder[1],
+      2,
+      `lead-only should prefer a Bug on slot 1 by average; got ${leadOnlyOrder.join(",")}`,
+    );
   });
 });
